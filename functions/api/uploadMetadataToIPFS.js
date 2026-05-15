@@ -2,42 +2,40 @@ import { PinataSDK } from "pinata";
 import { requireAuth } from "../_lib/auth.js";
 import { checkRateLimit } from "../_lib/rateLimit.js";
 
-// Izmantojam onRequestPost, lai automātiski atļautu TIKAI POST pieprasījumus
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  // =========================================
-  // 1. AUTH CHECK (obligāts)
-  // =========================================
-  const user = requireAuth(request, env);
-  
-  // Ja requireAuth atgriež Response objektu (piemēram, 401 unauth), mēs to uzreiz atgriežam klientam
-  if (user instanceof Response) {
-    return user;
-  }
-  
-  if (!user || !user.address) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" }
-    });
-  }
-
-  // =========================================
-  // 2. RATE LIMIT (5 metadati minūtē vienam lietotājam)
-  // =========================================
-  const rateKey = `upload-metadata:${user.address}`;
-  if (!checkRateLimit({ key: rateKey, limit: 5, windowMs: 60000 }, env)) {
-    return new Response(JSON.stringify({ 
-      error: 'Too many metadata uploads. Try again later.' 
-    }), {
-      status: 429,
-      headers: { "Content-Type": "application/json" }
-    });
-  }
-
   try {
-    // 3. Iegūstam datus no pieprasījuma body (Cloudflare asinhronā pieeja)
+    // =========================================
+    // 1. AUTH CHECK (obligāts) - ar await
+    // =========================================
+    const user = await requireAuth(request, env);
+    
+    if (user instanceof Response) {
+      return user;
+    }
+    
+    if (!user || !user.address) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    // =========================================
+    // 2. RATE LIMIT
+    // =========================================
+    const rateKey = `upload-metadata:${user.address}`;
+    if (!checkRateLimit({ key: rateKey, limit: 5, windowMs: 60000 }, env)) {
+      return new Response(JSON.stringify({ 
+        error: 'Too many metadata uploads. Try again later.' 
+      }), {
+        status: 429,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    // 3. Iegūstam datus no pieprasījuma body
     let body;
     try {
       body = await request.json();
@@ -50,7 +48,6 @@ export async function onRequestPost(context) {
 
     let metadata = body;
 
-    // Normalizējam payload, saglabājot tavu oriģinālo loģiku
     if (metadata.metadata && !metadata.name) {
       metadata = metadata.metadata;
     }
@@ -71,13 +68,12 @@ export async function onRequestPost(context) {
       });
     }
 
-    // 4. Pinata SDK inicializācija ar Cloudflare vides mainīgajiem
+    // 4. Pinata SDK inicializācija
     const pinata = new PinataSDK({
       pinataJwt: env.PINATA_JWT,
       pinataGateway: env.PINATA_GATEWAY,
     });
 
-    // Augšupielādējam JSON uz Pinata
     const result = await pinata.upload.public.json(metadata);
 
     console.log(`✅ User ${user.address} uploaded metadata: ${metadata.name}, cid: ${result.cid}`);
