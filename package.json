@@ -8,6 +8,6 @@
   "dependencies": {
     "ethers": "^6.13.0",
     "jsonwebtoken": "^9.0.2",
-    "pinata": "^0.5.0"
+    "pinata": "latest"
   }
 }
