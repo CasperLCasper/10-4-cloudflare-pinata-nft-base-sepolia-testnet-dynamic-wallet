@@ -1,37 +1,81 @@
 import { ethers } from 'ethers';
-import { requireAuth } from "../lib/auth.js";
-import { checkRateLimit } from "../lib/rateLimit.js";
+import { requireAuth } from "../_lib/auth.js";
+import { checkRateLimit } from "../_lib/rateLimit.js";
 
 const WALLET_NFT_ABI = [
   "function mint(address to, string memory jsonCID, bytes memory signature) external payable",
   "function mintPrice() public view returns (uint256)"
 ];
 
-const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
-const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY; // 🗝️ Servera slepenā atslēga
+// Izmantojam onRequestPost, lai automātiski atļautu TIKAI POST pieprasījumus
+export async function onRequestPost(context) {
+  const { request, env } = context;
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  const user = requireAuth(req, res);
-  if (!user) return;
-
-  const rateKey = `mint:${user.address}`;
-  if (!checkRateLimit({ key: rateKey, limit: 5, windowMs: 60000 })) {
-    return res.status(429).json({ success: false, error: 'Too many requests' });
+  // 1. 🔐 AUTH (obligāts)
+  const user = requireAuth(request, env);
+  
+  // Ja requireAuth atgriež Response objektu (piemēram, 401 unauth), mēs to uzreiz atgriežam klientam
+  if (user instanceof Response) {
+    return user;
+  }
+  
+  if (!user || !user.address) {
+    return new Response(JSON.stringify({ success: false, error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 
-  const { wallet, metadataUri } = req.body;
+  // 2. 🚫 RATE LIMIT (pēc autentifikācijas)
+  const rateKey = `mint:${user.address}`;
+  if (!checkRateLimit({ key: rateKey, limit: 5, windowMs: 60000 }, env)) {
+    return new Response(JSON.stringify({ success: false, error: 'Too many requests' }), {
+      status: 429,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+
+  // 3. Iegūstam datus no pieprasījuma body (Cloudflare asinhronā pieeja)
+  let body;
+  try {
+    body = await request.json();
+  } catch (e) {
+    return new Response(JSON.stringify({ success: false, error: 'Maldīgs JSON formāts' }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+
+  const { wallet, metadataUri } = body;
   if (!wallet || !metadataUri || !ethers.isAddress(wallet)) {
-    return res.status(400).json({ success: false, error: 'Invalid input' });
+    return new Response(JSON.stringify({ success: false, error: 'Invalid input' }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 
   if (user.address.toLowerCase() !== wallet.toLowerCase()) {
-    return res.status(403).json({ success: false, error: 'Unauthorized wallet' });
+    return new Response(JSON.stringify({ success: false, error: 'Unauthorized wallet' }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 
   try {
-    const provider = new ethers.JsonRpcProvider(process.env.ALCHEMY_RPC_URL);
+    // Vides mainīgie no Cloudflare context.env
+    const CONTRACT_ADDRESS = env.CONTRACT_ADDRESS;
+    const SERVER_PRIVATE_KEY = env.SERVER_PRIVATE_KEY;
+    const ALCHEMY_RPC_URL = env.ALCHEMY_RPC_URL;
+
+    if (!CONTRACT_ADDRESS || !SERVER_PRIVATE_KEY || !ALCHEMY_RPC_URL) {
+      return new Response(JSON.stringify({ success: false, error: 'Server variables not configured' }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    // Inicializējam provideri un kontraktu
+    const provider = new ethers.JsonRpcProvider(ALCHEMY_RPC_URL);
     const contract = new ethers.Contract(CONTRACT_ADDRESS, WALLET_NFT_ABI, provider);
     const mintPrice = await contract.mintPrice();
 
@@ -65,10 +109,13 @@ export default async function handler(req, res) {
       });
       estimatedGas = (estimatedGas * 115n) / 100n; // 15% rezerve drošībai
     } catch (err) {
-      return res.status(400).json({ success: false, error: 'Simulation failed. Check contract conditions.' });
+      return new Response(JSON.stringify({ success: false, error: 'Simulation failed. Check contract conditions.' }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
     }
 
-    return res.status(200).json({
+    return new Response(JSON.stringify({
       success: true,
       transaction: {
         to: CONTRACT_ADDRESS,
@@ -76,10 +123,16 @@ export default async function handler(req, res) {
         value: mintPrice.toString(),
         gasLimit: estimatedGas.toString()
       }
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
     });
 
   } catch (error) {
     console.error("🔥 Server error:", error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+    return new Response(JSON.stringify({ success: false, error: 'Internal server error' }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 }
