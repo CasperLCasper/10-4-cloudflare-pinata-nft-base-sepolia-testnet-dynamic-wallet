@@ -1,0 +1,6 @@
+#:schema node_modules/wrangler/config-schema.json
+compatibility_flags = [ "nodejs_compat" ]
+
+[pages_build_config]
+build_command = "npm install"
+pages_build_output_dir = "."
