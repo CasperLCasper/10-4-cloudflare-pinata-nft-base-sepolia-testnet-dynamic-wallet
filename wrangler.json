@@ -1,9 +1,0 @@
-{
-  "pages_build_config": {
-    "build_command": "npm install",
-    "destination_dir": "."
-  },
-  "compatibility_flags": [
-    "nodejs_compat"
-  ]
-}
