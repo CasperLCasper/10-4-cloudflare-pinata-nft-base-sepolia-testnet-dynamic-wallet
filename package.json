@@ -1,19 +1,10 @@
 {
-  "name": "wallet-visualizer",
+  "name": "nft-base-sepolia-testnet",
   "version": "1.0.0",
-  "type": "module",
+  "private": true,
   "dependencies": {
-    "ethers": "^6.10.0",
+    "ethers": "^6.13.0",
     "jsonwebtoken": "^9.0.2",
-    "node-fetch": "^3.3.2",
-    "pinata": "^2.1.0"
-  },
-  "scripts": {
-    "dev": "vercel dev",
-    "start": "vercel dev",
-    "build": "echo 'No build step needed'"
-  },
-  "engines": {
-    "node": ">=18"
+    "pinata": "^0.5.0"
   }
 }
