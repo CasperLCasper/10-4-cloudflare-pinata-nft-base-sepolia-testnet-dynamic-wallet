@@ -2,6 +2,9 @@
   "name": "nft-base-sepolia-testnet",
   "version": "1.0.0",
   "private": true,
+  "scripts": {
+    "build": "npm install"
+  },
   "dependencies": {
     "ethers": "^6.13.0",
     "jsonwebtoken": "^9.0.2",
