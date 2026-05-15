@@ -1,10 +1,8 @@
 import jwt from "jsonwebtoken";
 import { ethers } from "ethers";
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-this";
-
-// Verify wallet signature
-export function verifySignature(address, message, signature) {
+// Verify wallet signature (Pielāgots, ja nu nākotnē šeit savajagas env)
+export function verifySignature(address, message, signature, env) {
   try {
     const recovered = ethers.verifyMessage(message, signature);
     return recovered.toLowerCase() === address.toLowerCase();
@@ -13,40 +11,47 @@ export function verifySignature(address, message, signature) {
   }
 }
 
-// Create JWT
-export function createToken(address) {
-  return jwt.sign({ address }, JWT_SECRET, { expiresIn: "1h" });
+// Create JWT (Slepeno atslēgu lasām no nodotā env)
+export function createToken(address, env) {
+  const secret = env?.JWT_SECRET || "dev-secret-change-this";
+  return jwt.sign({ address }, secret, { expiresIn: "1h" });
 }
 
-// Verify JWT
-export function verifyToken(token) {
+// Verify JWT (Slepeno atslēgu lasām no nodotā env)
+export function verifyToken(token, env) {
   try {
-    return jwt.verify(token, JWT_SECRET);
+    const secret = env?.JWT_SECRET || "dev-secret-change-this";
+    return jwt.verify(token, secret);
   } catch {
     return null;
   }
 }
 
-// Optional auth (NEKAD nemet error)
-export function getOptionalUser(req) {
+// Optional auth (Pielāgots Cloudflare 'request' un 'env' objektiem)
+export function getOptionalUser(request, env) {
   try {
-    const authHeader = req.headers.authorization;
+    // Cloudflare vidē headerus lasa ar .get() metodi
+    const authHeader = request.headers.get("authorization");
     if (!authHeader) return null;
 
     const token = authHeader.replace("Bearer ", "");
-    return verifyToken(token);
+    return verifyToken(token, env);
   } catch {
     return null;
   }
 }
 
-// Strict auth (ja vajag nākotnē)
-export function requireAuth(req, res) {
-  const user = getOptionalUser(req);
+// Strict auth (Gatavs Cloudflare Pages videi)
+export function requireAuth(request, env) {
+  const user = getOptionalUser(request, env);
 
+  // Tā kā Cloudflare vidē nav 'res' objekta, kļūdas gadījumā 
+  // mēs atgriežam gatavu Response objektu, kuru API galamērķis uzreiz pārsūtīs klientam.
   if (!user) {
-    res.status(401).json({ error: "Unauthorized" });
-    return null;
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 
   return user;
