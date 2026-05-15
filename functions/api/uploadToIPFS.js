@@ -1,86 +1,84 @@
 import { PinataSDK } from 'pinata';
 
-const pinata = new PinataSDK({
-  pinataJwt: process.env.PINATA_JWT,
-  pinataGateway: process.env.PINATA_GATEWAY,
-});
-
-// Validācijas noteikumi
+// Validācijas noteikumi paliek nemainīgi
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'video/mp4', 'video/webm'];
 const MAX_SIZE = 50 * 1024 * 1024; // 50MB
 
-export default async function handler(req, res) {
-  // Tikai POST pieprasījumi
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+// Izmantojam onRequestPost, lai atļautu tikai POST pieprasījumus
+export async function onRequestPost(context) {
+  const { request, env } = context;
 
   try {
-    // Faila apstrāde no form-data
-    const chunks = [];
-    req.on('data', chunk => chunks.push(chunk));
-    
-    await new Promise((resolve) => {
-      req.on('end', () => resolve());
-    });
-    
-    const buffer = Buffer.concat(chunks);
-    
-    const boundary = req.headers['content-type'].split('boundary=')[1];
-    if (!boundary) throw new Error('No boundary found');
-    
-    const parts = buffer.toString('binary').split(`--${boundary}`);
-    
-    let fileBuffer = null;
-    let filename = null;
-    let contentType = 'image/jpeg';
-    
-    for (const part of parts) {
-      if (part.includes('Content-Disposition: form-data; name="file"')) {
-        const match = part.match(/filename="(.+)"/);
-        if (match) filename = match[1];
-        
-        const ctMatch = part.match(/Content-Type: (.+)/);
-        if (ctMatch) contentType = ctMatch[1].trim();
-        
-        const start = part.indexOf('\r\n\r\n') + 4;
-        let end = part.lastIndexOf('\r\n--');
-        if (end === -1) end = part.length;
-        
-        const binaryData = part.substring(start, end);
-        fileBuffer = Buffer.from(binaryData, 'binary');
-        break;
-      }
+    // 1. Cloudflare iebūvētā FormData apstrāde (aizstāj visu manuālo bufferu skaldīšanu)
+    let formData;
+    try {
+      formData = await request.formData();
+    } catch (e) {
+      return new Response(JSON.stringify({ error: "Invalid form data or no data provided" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
     }
+
+    // Iegūstam failu no form-data pēc nosaukuma "file"
+    const fileEntry = formData.get('file');
     
-    if (!fileBuffer) throw new Error('No file found');
-    
-    // VALIDĀCIJA
+    if (!fileEntry || !(fileEntry instanceof File)) {
+      return new Response(JSON.stringify({ error: 'No file found in form-data under key "file"' }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    const filename = fileEntry.name || 'file.jpg';
+    const contentType = fileEntry.type;
+    const fileSize = fileEntry.size;
+
+    // 2. VALIDĀCIJA
     if (!ALLOWED_TYPES.includes(contentType)) {
-      return res.status(400).json({ 
+      return new Response(JSON.stringify({ 
         error: `File type not allowed: ${contentType}. Allowed: ${ALLOWED_TYPES.join(', ')}` 
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
       });
     }
     
-    if (fileBuffer.length > MAX_SIZE) {
-      return res.status(400).json({ 
-        error: `File too large: ${(fileBuffer.length / 1024 / 1024).toFixed(2)}MB. Max: 50MB` 
+    if (fileSize > MAX_SIZE) {
+      return new Response(JSON.stringify({ 
+        error: `File too large: ${(fileSize / 1024 / 1024).toFixed(2)}MB. Max: 50MB` 
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
       });
     }
     
-    // Augšupielādē uz Pinata
-    const file = new File([fileBuffer], filename || 'file.jpg', { type: contentType });
-    const result = await pinata.upload.public.file(file);
+    // 3. Pinata SDK inicializācija ar Cloudflare vides mainīgajiem
+    const pinata = new PinataSDK({
+      pinataJwt: env.PINATA_JWT,
+      pinataGateway: env.PINATA_GATEWAY,
+    });
+
+    // 4. Augšupielāde uz Pinata
+    // Izmantojam tieši to pašu File objektu, ko mums iedeva Cloudflare
+    const result = await pinata.upload.public.file(fileEntry);
     
-    console.log(`✅ Uploaded: ${filename}, type: ${contentType}, size: ${(fileBuffer.length / 1024).toFixed(1)}KB, cid: ${result.cid}`);
+    console.log(`✅ Uploaded: ${filename}, type: ${contentType}, size: ${(fileSize / 1024).toFixed(1)}KB, cid: ${result.cid}`);
     
-    res.json({
+    return new Response(JSON.stringify({
       ipfs: `ipfs://${result.cid}`,
       http: `https://gateway.pinata.cloud/ipfs/${result.cid}`,
       cid: result.cid
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
     });
+
   } catch (error) {
     console.error('Upload error:', error);
-    res.status(500).json({ error: error.message });
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 }
