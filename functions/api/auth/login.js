@@ -15,26 +15,14 @@ export async function onRequestPost(context) {
     const { address, message, signature } = body;
 
     if (!address || !message || !signature) {
-      return new Response(JSON.stringify({ error: "Missing fields", received: { address: !!address, message: !!message, signature: !!signature } }), {
+      return new Response(JSON.stringify({ error: "Missing fields" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });
     }
 
-    // Verify signature with detailed error
-    let isValid;
-    try {
-      isValid = verifySignature(address, message, signature, context.env);
-    } catch (verifyError) {
-      return new Response(JSON.stringify({ 
-        error: "Signature verification failed",
-        details: verifyError.message,
-        stack: verifyError.stack?.split('\n')[0]
-      }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
+    // Verify signature
+    const isValid = verifySignature(address, message, signature, context.env);
 
     if (!isValid) {
       return new Response(JSON.stringify({ error: "Invalid signature" }), {
@@ -43,20 +31,8 @@ export async function onRequestPost(context) {
       });
     }
 
-    // Create token with detailed error
-    let token;
-    try {
-      token = createToken(address, context.env);
-    } catch (tokenError) {
-      return new Response(JSON.stringify({ 
-        error: "Token creation failed",
-        details: tokenError.message,
-        stack: tokenError.stack?.split('\n')[0]
-      }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
+    // Create token (now async)
+    const token = await createToken(address, context.env);
 
     return new Response(JSON.stringify({ token }), {
       status: 200,
@@ -64,10 +40,9 @@ export async function onRequestPost(context) {
     });
 
   } catch (err) {
+    console.error("Login error:", err.message);
     return new Response(JSON.stringify({ 
-      error: "Login failed",
-      details: err.message,
-      stack: err.stack
+      error: "Login failed: " + err.message 
     }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
