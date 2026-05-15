@@ -1,4 +1,4 @@
-import jwt from "jsonwebtoken";
+import { SignJWT, jwtVerify } from "jose";
 import { ethers } from "ethers";
 
 // Verify wallet signature (Pielāgots, ja nu nākotnē šeit savajagas env)
