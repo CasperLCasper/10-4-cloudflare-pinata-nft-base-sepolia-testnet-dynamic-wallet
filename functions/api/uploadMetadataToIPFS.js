@@ -1,70 +1,104 @@
 import { PinataSDK } from "pinata";
-// Pievienoti .js paplašinājumi ESM saderībai
-import { requireAuth } from "../lib/auth.js";
-import { checkRateLimit } from "../lib/rateLimit.js";
+import { requireAuth } from "../_lib/auth.js";
+import { checkRateLimit } from "../_lib/rateLimit.js";
 
-const pinata = new PinataSDK({
-  pinataJwt: process.env.PINATA_JWT,
-  pinataGateway: process.env.PINATA_GATEWAY,
-});
+// Izmantojam onRequestPost, lai automātiski atļautu TIKAI POST pieprasījumus
+export async function onRequestPost(context) {
+  const { request, env } = context;
 
-export default async function handler(req, res) {
   // =========================================
-  // 1. METHOD CHECK
+  // 1. AUTH CHECK (obligāts)
   // =========================================
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+  const user = requireAuth(request, env);
+  
+  // Ja requireAuth atgriež Response objektu (piemēram, 401 unauth), mēs to uzreiz atgriežam klientam
+  if (user instanceof Response) {
+    return user;
+  }
+  
+  if (!user || !user.address) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 
   // =========================================
-  // 2. AUTH CHECK (obligāts)
-  // =========================================
-  const user = requireAuth(req, res);
-  if (!user) return; // requireAuth jau nosūtījis 401
-
-  // =========================================
-  // 3. RATE LIMIT (5 metadati minūtē vienam lietotājam)
+  // 2. RATE LIMIT (5 metadati minūtē vienam lietotājam)
   // =========================================
   const rateKey = `upload-metadata:${user.address}`;
-  if (!checkRateLimit({ key: rateKey, limit: 5, windowMs: 60000 })) {
-    return res.status(429).json({ 
+  if (!checkRateLimit({ key: rateKey, limit: 5, windowMs: 60000 }, env)) {
+    return new Response(JSON.stringify({ 
       error: 'Too many metadata uploads. Try again later.' 
+    }), {
+      status: 429,
+      headers: { "Content-Type": "application/json" }
     });
   }
 
   try {
-    let metadata = req.body;
+    // 3. Iegūstam datus no pieprasījuma body (Cloudflare asinhronā pieeja)
+    let body;
+    try {
+      body = await request.json();
+    } catch (e) {
+      return new Response(JSON.stringify({ error: 'Maldīgs JSON formāts' }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
 
-    // normalize payload
+    let metadata = body;
+
+    // Normalizējam payload, saglabājot tavu oriģinālo loģiku
     if (metadata.metadata && !metadata.name) {
       metadata = metadata.metadata;
     }
 
     if (!metadata) {
-      return res.status(400).json({ error: 'Metadata required' });
-    }
-
-    if (!metadata.name || !metadata.image) {
-      return res.status(400).json({
-        error: 'Metadata must contain name and image'
+      return new Response(JSON.stringify({ error: 'Metadata required' }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
       });
     }
 
+    if (!metadata.name || !metadata.image) {
+      return new Response(JSON.stringify({
+        error: 'Metadata must contain name and image'
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    // 4. Pinata SDK inicializācija ar Cloudflare vides mainīgajiem
+    const pinata = new PinataSDK({
+      pinataJwt: env.PINATA_JWT,
+      pinataGateway: env.PINATA_GATEWAY,
+    });
+
+    // Augšupielādējam JSON uz Pinata
     const result = await pinata.upload.public.json(metadata);
 
     console.log(`✅ User ${user.address} uploaded metadata: ${metadata.name}, cid: ${result.cid}`);
 
-    return res.json({
+    return new Response(JSON.stringify({
       ipfs: `ipfs://${result.cid}`,
       http: `https://gateway.pinata.cloud/ipfs/${result.cid}`,
       cid: result.cid
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
     });
 
   } catch (error) {
     console.error('Metadata upload error:', error);
 
-    return res.status(500).json({
+    return new Response(JSON.stringify({
       error: error.message
+    }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
     });
   }
 }
