@@ -11,18 +11,13 @@ export const CONTRACT_ABI = [
   "function mintPrice() view returns (uint256)"
 ];
 
-// 🔥 Vizualizācijai - tikai īstas mobilās ierīces (vecais variants)
-export const VIZ_LOW_POWER_MODE =
-  typeof navigator !== 'undefined' &&
-  /Mobi|Android/i.test(navigator.userAgent);
+// 🔥 Gudra mobilā noteikšana — NEieslēdzas uz datora, tikai uz patiešām vājām mobilajām ierīcēm
+const isMobile = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+const hasLowMemory = typeof navigator !== 'undefined' && navigator.deviceMemory && navigator.deviceMemory < 4;
+const hasFewCores = typeof navigator !== 'undefined' && navigator.hardwareConcurrency && navigator.hardwareConcurrency < 2;
 
-// 🔥 Pārējai aplikācijai - plašāks diapazons (jaunais variants)
-export const LOW_POWER_MODE =
-  typeof navigator !== 'undefined' &&
-  (
-    /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-    (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4)
-  );
+export const VIZ_LOW_POWER_MODE = isMobile && (hasLowMemory || hasFewCores);
+export const LOW_POWER_MODE = VIZ_LOW_POWER_MODE;
 
 // 🔥 Immutable particle config (no accidental mutations) - IZMANTO VIZ_LOW_POWER_MODE
 const PARTICLE_CONFIG = VIZ_LOW_POWER_MODE
