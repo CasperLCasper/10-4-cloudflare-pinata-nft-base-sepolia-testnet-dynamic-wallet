@@ -42,13 +42,8 @@ export async function startRecording(app) {
   app.showInfo = false;
   if (UI.tokenListContainer) UI.tokenListContainer.style.display = 'none';
   
+  // Saglabājam oriģinālās daļiņas, bet NEIEROBEŽOJAM to skaitu
   const originalParticles = app.particles;
-  if (window.LOW_POWER_MODE && app.particles.length > 40) {
-    app.particles = app.particles.slice(0, 40);
-  }
-  
-  // 🔥 NEPĀRTRAUC ANIMĀCIJU! Tikai paslēp info paneli
-  // stopAnimation(app); ← NOŅEMTS!
   
   let stream;
   try { 
@@ -72,10 +67,10 @@ export async function startRecording(app) {
   const chunks = [];
   let animationFrameId = null;
   
-  // 🔥 Turpina animāciju ierakstīšanas laikā
+  // Ierakstīšanas laikā rādām PILNU vizualizāciju (arī tokenu info)
   function recordAnimation() {
     if (!app.isRecording) return;
-    drawFrame(app, app.frameCount++, false);
+    drawFrame(app, app.frameCount++, true);
     animationFrameId = requestAnimationFrame(recordAnimation);
   }
   
@@ -90,11 +85,10 @@ export async function startRecording(app) {
   
   recorder.onstart = () => { 
     showToast('Recording...', 'info'); 
-    // 🔥 Sāk animācijas loopu
     recordAnimation(); 
   };
   
-  recorder.start(1000); // 🔥 Ieraksta 1 sekundes gabalos
+  recorder.start(1000);
   
   const startTime = performance.now();
   const duration = 15000;
@@ -116,7 +110,6 @@ export async function startRecording(app) {
   requestAnimationFrame(updateProgress);
   
   recorder.onstop = () => {
-    // 🔥 Aptur animācijas loopu
     if (animationFrameId) {
       cancelAnimationFrame(animationFrameId);
       animationFrameId = null;
@@ -150,7 +143,6 @@ export async function startRecording(app) {
     app.isRecording = false;
     showWarning('', false);
     
-    // 🔥 Restartē normālu animāciju
     if (app.animFrameId) cancelAnimationFrame(app.animFrameId);
     animate(app);
   };
