@@ -131,7 +131,7 @@ export async function onRequestPost(context) {
     const iface = new ethers.Interface(WALLET_NFT_ABI);
     const data = iface.encodeFunctionData('mint', [wallet, cleanCID, signature]);
 
-    // 8. ESTIMATE GAS
+    // 8. ESTIMATE GAS (Labots kļūdas izvads diagnostikai)
     let estimatedGas;
     try {
       estimatedGas = await provider.estimateGas({
@@ -145,7 +145,8 @@ export async function onRequestPost(context) {
       console.error('Gas estimation failed:', err.message);
       return new Response(JSON.stringify({ 
         success: false, 
-        error: 'Transaction simulation failed. You may not have enough funds or the contract conditions are not met.' 
+        // 🔥 Tagad frontendā redzēsim precīzo RPC/blockchain atteikuma iemeslu:
+        error: `Simulation Failed: ${err.message}` 
       }), {
         status: 400,
         headers: { "Content-Type": "application/json" }
