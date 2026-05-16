@@ -62,8 +62,8 @@ export async function onRequestGet(context) {
     const contract = url.searchParams.get("contract");
     chain = url.searchParams.get("chain") || 'sepolia';
 
-    // 2. Lietotāja sesijas iegūšana (nododam request un env uz _lib)
-    const user = getOptionalUser(request, env);
+    // 2. Lietotāja sesijas iegūšana (nododam request un env uz _lib) - TAGAD AR await
+    const user = await getOptionalUser(request, env);
     let account = accountParam || (user ? user.address : null); 
 
     if (!account) {
@@ -97,7 +97,6 @@ export async function onRequestGet(context) {
     }
 
     // 3. Rate limit un IP noteikšana Cloudflare veidā
-    // Cloudflare nodrošina klienta IP caur "CF-Connecting-IP" headeri
     const ip = request.headers.get("CF-Connecting-IP") || "unknown";
     const rateKey = user ? `user_${user.address}_nfts_${chain}` : `ip_${ip}_nfts_${chain}`;
 
