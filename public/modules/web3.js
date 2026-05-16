@@ -155,7 +155,8 @@ export async function connectWallet(app) {
     
     const loginSuccess = await login(signer, account);
     if (!loginSuccess) {
-      console.warn("Login failed, but continuing with visualization");
+      showToast('🔐 You need to sign the message to continue', 'warning');
+      throw new Error('Login rejected');
     }
     
     await app.renderSnapshot(app.currentVizChain);
@@ -178,12 +179,22 @@ export async function connectWallet(app) {
     
     let userMessage = 'Unable to connect wallet. Please try again.';
     if (err.message && err.message.includes('User rejected')) {
-      userMessage = 'You cancelled the connection. Please approve to connect.';
+      userMessage = 'You cancelled the connection. Please approve to continue.';
+    } else if (err.message && err.message.includes('Login rejected')) {
+      userMessage = 'You need to sign the message to access your wallet data.';
     } else if (err.message && err.message.includes('Already processing')) {
       userMessage = 'Please wait, wallet is busy. Try again in a moment.';
     }
     
-    showToast(userMessage, 'error'); 
+    showToast(userMessage, 'error');
+    
+    // Notīrām app stāvokli, ja lietotājs atteicās
+    if (err.message && (err.message.includes('User rejected') || err.message.includes('Login rejected'))) {
+      app.provider = null;
+      app.signer = null;
+      app.account = null;
+      if (UI.accountDisplay) UI.accountDisplay.textContent = 'Connected account: —';
+    }
   } finally { 
     setButtonLoading(UI.connectBtn, false); 
     hideProgress(); 
