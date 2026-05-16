@@ -120,14 +120,14 @@ export async function apiFetch(url, options = {}) {
     const errorText = await safeErrorText(response);
     
     if (response.status === 404) {
-      throw new Error('Service not available. Please try again later.');
+      throw new Error(`Service not available (404): ${errorText}`);
     } else if (response.status === 429) {
-      throw new Error('Too many requests. Please wait a moment and try again.');
+      throw new Error(`Too many requests (429): ${errorText}`);
     } else if (response.status >= 500) {
-      throw new Error('Server issue. Please try again in a few moments.');
+      throw new Error(`Server error (${response.status}): ${errorText}`);
     }
     
-    throw new Error(`Unable to complete request (${response.status}). Please try again.`);
+    throw new Error(`Request failed (${response.status}): ${errorText}`);
   }
   
   return response;
