@@ -73,17 +73,10 @@ export async function onRequestPost(context) {
     const SERVER_PRIVATE_KEY = env.SERVER_PRIVATE_KEY;
     const ALCHEMY_RPC_URL = env.ALCHEMY_RPC_URL;
 
-    // Pārbaudām, vai mainīgie eksistē
-    const missingVars = [];
-    if (!CONTRACT_ADDRESS) missingVars.push('CONTRACT_ADDRESS');
-    if (!SERVER_PRIVATE_KEY) missingVars.push('SERVER_PRIVATE_KEY');
-    if (!ALCHEMY_RPC_URL) missingVars.push('ALCHEMY_RPC_URL');
-    
-    if (missingVars.length > 0) {
-      console.error('Missing env vars:', missingVars);
+    if (!CONTRACT_ADDRESS || !SERVER_PRIVATE_KEY || !ALCHEMY_RPC_URL) {
       return new Response(JSON.stringify({ 
         success: false, 
-        error: `Server configuration incomplete. Missing: ${missingVars.join(', ')}` 
+        error: 'Server configuration incomplete' 
       }), {
         status: 500,
         headers: { "Content-Type": "application/json" }
@@ -93,18 +86,6 @@ export async function onRequestPost(context) {
     // 5. Blockchain dati
     const provider = new ethers.JsonRpcProvider(ALCHEMY_RPC_URL);
     
-    // Pārbaudām, vai līgums eksistē
-    const code = await provider.getCode(CONTRACT_ADDRESS);
-    if (code === '0x') {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: 'Contract not found at this address on Base Sepolia' 
-      }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" }
-      });
-    }
-
     const contract = new ethers.Contract(CONTRACT_ADDRESS, WALLET_NFT_ABI, provider);
     
     let mintPrice;
@@ -122,29 +103,35 @@ export async function onRequestPost(context) {
 
     // Normalizējam CID
     let cleanCID = metadataUri.replace("ipfs://", "").split("/")[0];
-    // Ja ir gateway URL, izgūstam tikai CID
     if (cleanCID.includes('http')) {
       const parts = cleanCID.split('/');
       cleanCID = parts[parts.length - 1];
     }
-    
+
     console.log('Clean CID:', cleanCID);
 
-    // SIGNATURE
+    // 6. SIGNATURE GENERATION (saderīga ar OpenZeppelin v5)
     const serverWallet = new ethers.Wallet(SERVER_PRIVATE_KEY);
-    
+
+    // Tieši tāpat kā Solidity: keccak256(abi.encodePacked(to, jsonCID))
     const messageHash = ethers.solidityPackedKeccak256(
       ["address", "string"],
       [wallet, cleanCID]
     );
-    
-    const signature = await serverWallet.signMessage(ethers.getBytes(messageHash));
 
-    // Prepare transaction
+    // Parakstām bināro hēšu ar signingKey (bez Ethereum prefiksa)
+    const rawSignature = await serverWallet.signingKey.sign(ethers.getBytes(messageHash));
+    
+    // Serializējam parakstu
+    const signature = ethers.Signature.from(rawSignature).serialized;
+
+    console.log('Signature generated successfully');
+
+    // 7. Sagatavojam transakciju
     const iface = new ethers.Interface(WALLET_NFT_ABI);
     const data = iface.encodeFunctionData('mint', [wallet, cleanCID, signature]);
 
-    // Estimate gas
+    // 8. ESTIMATE GAS
     let estimatedGas;
     try {
       estimatedGas = await provider.estimateGas({
