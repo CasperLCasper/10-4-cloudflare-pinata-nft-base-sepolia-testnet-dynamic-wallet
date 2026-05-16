@@ -11,7 +11,7 @@ export async function onRequestPost(context) {
   const { request, env } = context;
 
   try {
-    // 1. 🔐 AUTH (obligāts) - ar await
+    // 1. AUTH
     const user = await requireAuth(request, env);
     
     if (user instanceof Response) {
@@ -25,7 +25,7 @@ export async function onRequestPost(context) {
       });
     }
 
-    // 2. 🚫 RATE LIMIT
+    // 2. RATE LIMIT
     const rateKey = `mint:${user.address}`;
     if (!checkRateLimit({ key: rateKey, limit: 5, windowMs: 60000 }, env)) {
       return new Response(JSON.stringify({ success: false, error: 'Too many requests' }), {
@@ -34,20 +34,28 @@ export async function onRequestPost(context) {
       });
     }
 
-    // 3. Iegūstam datus no pieprasījuma body
+    // 3. Body dati
     let body;
     try {
       body = await request.json();
     } catch (e) {
-      return new Response(JSON.stringify({ success: false, error: 'Maldīgs JSON formāts' }), {
+      return new Response(JSON.stringify({ success: false, error: 'Invalid JSON' }), {
         status: 400,
         headers: { "Content-Type": "application/json" }
       });
     }
 
     const { wallet, metadataUri } = body;
-    if (!wallet || !metadataUri || !ethers.isAddress(wallet)) {
-      return new Response(JSON.stringify({ success: false, error: 'Invalid input' }), {
+    
+    if (!wallet || !metadataUri) {
+      return new Response(JSON.stringify({ success: false, error: 'Missing wallet or metadataUri' }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    if (!ethers.isAddress(wallet)) {
+      return new Response(JSON.stringify({ success: false, error: 'Invalid wallet address' }), {
         status: 400,
         headers: { "Content-Type": "application/json" }
       });
@@ -60,27 +68,69 @@ export async function onRequestPost(context) {
       });
     }
 
-    // Vides mainīgie
+    // 4. Vides mainīgie
     const CONTRACT_ADDRESS = env.CONTRACT_ADDRESS;
     const SERVER_PRIVATE_KEY = env.SERVER_PRIVATE_KEY;
     const ALCHEMY_RPC_URL = env.ALCHEMY_RPC_URL;
 
-    if (!CONTRACT_ADDRESS || !SERVER_PRIVATE_KEY || !ALCHEMY_RPC_URL) {
-      return new Response(JSON.stringify({ success: false, error: 'Server variables not configured' }), {
+    // Pārbaudām, vai mainīgie eksistē
+    const missingVars = [];
+    if (!CONTRACT_ADDRESS) missingVars.push('CONTRACT_ADDRESS');
+    if (!SERVER_PRIVATE_KEY) missingVars.push('SERVER_PRIVATE_KEY');
+    if (!ALCHEMY_RPC_URL) missingVars.push('ALCHEMY_RPC_URL');
+    
+    if (missingVars.length > 0) {
+      console.error('Missing env vars:', missingVars);
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: `Server configuration incomplete. Missing: ${missingVars.join(', ')}` 
+      }), {
         status: 500,
         headers: { "Content-Type": "application/json" }
       });
     }
 
-    // Inicializējam provideri un kontraktu
+    // 5. Blockchain dati
     const provider = new ethers.JsonRpcProvider(ALCHEMY_RPC_URL);
+    
+    // Pārbaudām, vai līgums eksistē
+    const code = await provider.getCode(CONTRACT_ADDRESS);
+    if (code === '0x') {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Contract not found at this address on Base Sepolia' 
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
     const contract = new ethers.Contract(CONTRACT_ADDRESS, WALLET_NFT_ABI, provider);
-    const mintPrice = await contract.mintPrice();
+    
+    let mintPrice;
+    try {
+      mintPrice = await contract.mintPrice();
+    } catch (err) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Cannot read mintPrice. Is this the correct contract?' 
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
 
     // Normalizējam CID
-    let cleanCID = metadataUri.replace("ipfs://", "").split("/").pop();
+    let cleanCID = metadataUri.replace("ipfs://", "").split("/")[0];
+    // Ja ir gateway URL, izgūstam tikai CID
+    if (cleanCID.includes('http')) {
+      const parts = cleanCID.split('/');
+      cleanCID = parts[parts.length - 1];
+    }
+    
+    console.log('Clean CID:', cleanCID);
 
-    // 🔐 SIGNATURE GENERATION
+    // SIGNATURE
     const serverWallet = new ethers.Wallet(SERVER_PRIVATE_KEY);
     
     const messageHash = ethers.solidityPackedKeccak256(
@@ -90,11 +140,11 @@ export async function onRequestPost(context) {
     
     const signature = await serverWallet.signMessage(ethers.getBytes(messageHash));
 
-    // Sagatavojam datus ar parakstu
+    // Prepare transaction
     const iface = new ethers.Interface(WALLET_NFT_ABI);
     const data = iface.encodeFunctionData('mint', [wallet, cleanCID, signature]);
 
-    // 🔥 ESTIMATE GAS
+    // Estimate gas
     let estimatedGas;
     try {
       estimatedGas = await provider.estimateGas({
@@ -105,7 +155,11 @@ export async function onRequestPost(context) {
       });
       estimatedGas = (estimatedGas * 115n) / 100n;
     } catch (err) {
-      return new Response(JSON.stringify({ success: false, error: 'Simulation failed. Check contract conditions.' }), {
+      console.error('Gas estimation failed:', err.message);
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Transaction simulation failed. You may not have enough funds or the contract conditions are not met.' 
+      }), {
         status: 400,
         headers: { "Content-Type": "application/json" }
       });
@@ -125,8 +179,11 @@ export async function onRequestPost(context) {
     });
 
   } catch (error) {
-    console.error("🔥 Server error:", error);
-    return new Response(JSON.stringify({ success: false, error: 'Internal server error' }), {
+    console.error("Server error:", error.message);
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: 'Server error: ' + error.message 
+    }), {
       status: 500,
       headers: { "Content-Type": "application/json" }
     });
