@@ -11,10 +11,8 @@ yarn-error.log*
 .env.production
 .env.development
 
-# Vercel
-.vercel/
-.vercel_cache/
-.vercel/output/
+# Cloudflare
+.wrangler/
 
 # OS
 .DS_Store
