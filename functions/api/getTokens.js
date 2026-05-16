@@ -56,8 +56,8 @@ export async function onRequestGet(context) {
     const accountParam = url.searchParams.get("account");
     chain = url.searchParams.get("chain") || 'sepolia';
 
-    // 2. Lietotāja sesijas noteikšana
-    const user = getOptionalUser(request, env);
+    // 2. Lietotāja sesijas noteikšana - TAGAD AR await
+    const user = await getOptionalUser(request, env);
     let account = accountParam || (user ? user.address : null);
 
     if (!account) {
