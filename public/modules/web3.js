@@ -150,6 +150,9 @@ export async function connectWallet(app) {
     // 🔥 PILNA ADRESE (nesaīsināta)
     UI.accountDisplay.textContent = `Connected account: ${account}`;
     
+    // Wait for MetaMask to fully connect before signing
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     const loginSuccess = await login(signer, account);
     if (!loginSuccess) {
       console.warn("Login failed, but continuing with visualization");
@@ -175,7 +178,7 @@ export async function connectWallet(app) {
     
     let userMessage = 'Unable to connect wallet. Please try again.';
     if (err.message && err.message.includes('User rejected')) {
-      userMessage = 'You cancelled the connection. Please approve to continue.';
+      userMessage = 'You cancelled the connection. Please approve to connect.';
     } else if (err.message && err.message.includes('Already processing')) {
       userMessage = 'Please wait, wallet is busy. Try again in a moment.';
     }
