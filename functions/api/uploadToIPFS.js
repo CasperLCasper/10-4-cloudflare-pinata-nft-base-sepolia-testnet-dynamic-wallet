@@ -1,4 +1,5 @@
 import { PinataSDK } from 'pinata';
+import { requireAuth } from "../_lib/auth.js";
 
 // Validācijas noteikumi paliek nemainīgi
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'video/mp4', 'video/webm'];
@@ -9,6 +10,16 @@ export async function onRequestPost(context) {
   const { request, env } = context;
 
   try {
+    // 0. AUTH pārbaude
+    const user = await requireAuth(request, env);
+    if (user instanceof Response) return user;
+    if (!user || !user.address) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
     // 1. Cloudflare iebūvētā FormData apstrāde (aizstāj visu manuālo bufferu skaldīšanu)
     let formData;
     try {
@@ -63,7 +74,7 @@ export async function onRequestPost(context) {
     // Izmantojam tieši to pašu File objektu, ko mums iedeva Cloudflare
     const result = await pinata.upload.public.file(fileEntry);
     
-    console.log(`✅ Uploaded: ${filename}, type: ${contentType}, size: ${(fileSize / 1024).toFixed(1)}KB, cid: ${result.cid}`);
+    console.log(`✅ User ${user.address} uploaded: ${filename}, type: ${contentType}, size: ${(fileSize / 1024).toFixed(1)}KB, cid: ${result.cid}`);
     
     return new Response(JSON.stringify({
       ipfs: `ipfs://${result.cid}`,
