@@ -1,5 +1,5 @@
 // ============================================ //
-// API FUNCTIONS
+// API FUNCTIONS (with nonce support)
 // ============================================ //
 
 import { CONTRACT_ABI, getMintProvider } from './config.js';
@@ -133,13 +133,41 @@ export async function apiFetch(url, options = {}) {
   return response;
 }
 
+// ============================================ //
+// NONCE HANDLING (jauns)
+// ============================================ //
+
+/**
+ * Iegūst nonce no servera pirms pieteikšanās.
+ */
+async function getNonce() {
+  const res = await fetch('/api/auth/nonce');
+  if (!res.ok) {
+    const text = await safeErrorText(res);
+    throw new Error(`Failed to get nonce: ${text}`);
+  }
+  const data = await safeJson(res);
+  return data.nonce;
+}
+
+// ============================================ //
+// AUTH FUNCTIONS
+// ============================================ //
+
 export async function login(signer, account) {
   if (!signer) return false;
   
   try {
-    const message = `Login to NFT app: ${Date.now()}`;
+    // 1. Iegūstam nonce no servera
+    const nonce = await getNonce();
+    
+    // 2. Veidojam ziņojumu, kas sākas ar nonce
+    const message = `${nonce} - Login to NFT Wallet Visualizer`;
+    
+    // 3. Parakstām ziņojumu ar maku
     const signature = await signer.signMessage(message);
     
+    // 4. Nosūtām uz serveri
     const res = await fetchWithTimeout('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
