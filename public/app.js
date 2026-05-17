@@ -154,11 +154,13 @@ const App = Object.assign({}, AppState, {
         showToast('🎬 Video upload failed, continuing without video', 'warning');
       }
       
+      // Iegūstam attēla CID (tīru, bez ipfs:// priedēkļa)
       let cleanImageCID = imageResult.cid || imageResult.ipfs;
       if (cleanImageCID && cleanImageCID.startsWith('ipfs://')) {
         cleanImageCID = cleanImageCID.substring(7);
       }
       
+      // Iegūstam video CID, ja ir
       let cleanVideoCID = null;
       if (videoResult && (videoResult.cid || videoResult.ipfs)) {
         cleanVideoCID = videoResult.cid || videoResult.ipfs;
@@ -167,11 +169,11 @@ const App = Object.assign({}, AppState, {
         }
       }
       
+      // Būvējam metadatu objektu – izmantojam IPFS URI standarta formu
       const metadata = {
         name: "Wallet Visualization NFT",
-        // 🔥 PILNA ADRESE (nesaīsināta)
         description: `Generated from wallet ${this.account} on ${new Date().toISOString()}`,
-        image: `${PINATA_GATEWAY}${cleanImageCID}`,
+        image: `ipfs://${cleanImageCID}`,
         attributes: [
           { trait_type: "ETH Balance", value: this.ethBalance.toString() },
           { trait_type: "Token Count", value: this.tokens.length.toString() },
@@ -181,8 +183,10 @@ const App = Object.assign({}, AppState, {
           { trait_type: "Generated At", value: new Date().toISOString() }
         ]
       };
+      
+      // Pievienojam video tikai tad, ja tas veiksmīgi augšupielādēts
       if (videoResult && cleanVideoCID) {
-        metadata.animation_url = `${PINATA_GATEWAY}${cleanVideoCID}`;
+        metadata.animation_url = `ipfs://${cleanVideoCID}`;
       }
       
       const metadataResult = await uploadMetadataToIPFS(metadata);
