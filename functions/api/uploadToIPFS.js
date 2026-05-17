@@ -18,9 +18,9 @@ export async function onRequestPost(context) {
       });
     }
 
-    // Rate limiting
+    // Rate limiting (ar await)
     const rateKey = `upload-file:${user.address}`;
-    if (!checkRateLimit({ key: rateKey, limit: 5, windowMs: 60000 }, env)) {
+    if (!(await checkRateLimit({ key: rateKey, limit: 5, windowMs: 60000 }, env))) {
       return new Response(JSON.stringify({ error: 'Too many file uploads. Try again later.' }), {
         status: 429,
         headers: { "Content-Type": "application/json" }
