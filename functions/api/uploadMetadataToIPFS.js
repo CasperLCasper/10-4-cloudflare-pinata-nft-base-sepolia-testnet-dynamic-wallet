@@ -1,20 +1,14 @@
 import { PinataSDK } from "pinata";
 import { requireAuth } from "../_lib/auth.js";
 import { checkRateLimit } from "../_lib/rateLimit.js";
+import { setCache } from "../_lib/cache.js";
 
 export async function onRequestPost(context) {
   const { request, env } = context;
 
   try {
-    // =========================================
-    // 1. AUTH CHECK (obligāts) - ar await
-    // =========================================
     const user = await requireAuth(request, env);
-    
-    if (user instanceof Response) {
-      return user;
-    }
-    
+    if (user instanceof Response) return user;
     if (!user || !user.address) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -22,61 +16,74 @@ export async function onRequestPost(context) {
       });
     }
 
-    // =========================================
-    // 2. RATE LIMIT
-    // =========================================
     const rateKey = `upload-metadata:${user.address}`;
     if (!checkRateLimit({ key: rateKey, limit: 5, windowMs: 60000 }, env)) {
-      return new Response(JSON.stringify({ 
-        error: 'Too many metadata uploads. Try again later.' 
-      }), {
+      return new Response(JSON.stringify({ error: 'Too many metadata uploads. Try again later.' }), {
         status: 429,
         headers: { "Content-Type": "application/json" }
       });
     }
 
-    // 3. Iegūstam datus no pieprasījuma body
     let body;
     try {
       body = await request.json();
     } catch (e) {
-      return new Response(JSON.stringify({ error: 'Maldīgs JSON formāts' }), {
+      return new Response(JSON.stringify({ error: 'Invalid JSON format' }), {
         status: 400,
         headers: { "Content-Type": "application/json" }
       });
     }
 
     let metadata = body;
-
     if (metadata.metadata && !metadata.name) {
       metadata = metadata.metadata;
     }
 
-    if (!metadata) {
-      return new Response(JSON.stringify({ error: 'Metadata required' }), {
+    if (!metadata || !metadata.name || !metadata.image) {
+      return new Response(JSON.stringify({ error: 'Metadata must contain name and image' }), {
         status: 400,
         headers: { "Content-Type": "application/json" }
       });
     }
 
-    if (!metadata.name || !metadata.image) {
-      return new Response(JSON.stringify({
-        error: 'Metadata must contain name and image'
-      }), {
+    // Stingrāka validācija: lauku tipi, max garums, attēla URL formāts
+    if (typeof metadata.name !== 'string' || metadata.name.length > 100) {
+      return new Response(JSON.stringify({ error: 'Invalid name (max 100 characters)' }), {
         status: 400,
         headers: { "Content-Type": "application/json" }
       });
     }
+    if (typeof metadata.image !== 'string' || metadata.image.length > 500) {
+      return new Response(JSON.stringify({ error: 'Invalid image URL' }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+    // Var pievienot URL validāciju: jāsākas ar http:// vai https://
+    if (!/^https?:\/\/.+/.test(metadata.image)) {
+      return new Response(JSON.stringify({ error: 'Image must be a valid HTTP/HTTPS URL' }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+    // Aizliegt papildu laukus (ja vēlas, var atļaut tikai noteiktus)
+    const allowedFields = ['name', 'image', 'description', 'attributes'];
+    for (const key of Object.keys(metadata)) {
+      if (!allowedFields.includes(key)) {
+        delete metadata[key]; // vai atgriezt kļūdu
+      }
+    }
 
-    // 4. Pinata SDK inicializācija
     const pinata = new PinataSDK({
       pinataJwt: env.PINATA_JWT,
       pinataGateway: env.PINATA_GATEWAY,
     });
 
     const result = await pinata.upload.public.json(metadata);
-
     console.log(`✅ User ${user.address} uploaded metadata: ${metadata.name}, cid: ${result.cid}`);
+
+    // Saglabājam CID kā pēdējo augšupielādi (derīgu 5 minūtes, lai varētu izmantot mint)
+    setCache(`lastUploadCID:${user.address}`, result.cid, env, 5 * 60 * 1000);
 
     return new Response(JSON.stringify({
       ipfs: `ipfs://${result.cid}`,
@@ -89,10 +96,7 @@ export async function onRequestPost(context) {
 
   } catch (error) {
     console.error('Metadata upload error:', error);
-
-    return new Response(JSON.stringify({
-      error: error.message
-    }), {
+    return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { "Content-Type": "application/json" }
     });
