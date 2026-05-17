@@ -4,11 +4,10 @@
 
 import { UI } from './state.js';
 import { showToast, showProgress, setProgress, hideProgress, setButtonLoading, updateTokenListUI } from './ui.js';
-import { MAX_PARTICLES, CONNECTION_DISTANCE, VIZ_LOW_POWER_MODE } from './config.js';  // 🔥 VIZ_LOW_POWER_MODE
+import { MAX_PARTICLES, CONNECTION_DISTANCE, VIZ_LOW_POWER_MODE } from './config.js';
 import { getTokens, getAllNFTs } from './api.js';
 
 export function getCanvasDimensions() {
-  // 🔥 Izmanto VIZ_LOW_POWER_MODE (tikai īstas mobilās ierīces)
   const isMobile = VIZ_LOW_POWER_MODE;
   let width = isMobile ? 1080 : 1920;
   let height = isMobile ? 720 : 1080;
@@ -212,7 +211,6 @@ export function drawFrame(app, frame, showTokensFrame) {
     ctx.fill();
   }
   
-  // 🔥 Izmanto VIZ_LOW_POWER_MODE extra efektiem
   if (!VIZ_LOW_POWER_MODE || frame % 2 === 0) {
     addon.drawExtraEffects(ctx, W, H, frame, app.particles, cx0, cy0);
   }
@@ -287,6 +285,11 @@ export async function renderSnapshot(app, chain) {
   showProgress();
   app.particleCache.clear();
   showToast(`Loading ${chain} wallet data...`, 'info');
+
+  // 🔥 NOTĪRĀM VECOS DATUS pirms jaunu ielādes
+  app.tokens = [];
+  app.ethBalance = 0;
+  app.txCount = 0;
 
   const steps = [
     { name: 'ETH balance...', func: async () => { app.ethBalance = Number(ethers.formatEther(await app.provider.getBalance(app.account))) || 0; }},
