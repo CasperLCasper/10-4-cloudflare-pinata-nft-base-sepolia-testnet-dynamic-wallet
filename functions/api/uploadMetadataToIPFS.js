@@ -17,7 +17,7 @@ export async function onRequestPost(context) {
     }
 
     const rateKey = `upload-metadata:${user.address}`;
-    if (!checkRateLimit({ key: rateKey, limit: 5, windowMs: 60000 }, env)) {
+    if (!(await checkRateLimit({ key: rateKey, limit: 5, windowMs: 60000 }, env))) {
       return new Response(JSON.stringify({ error: 'Too many metadata uploads. Try again later.' }), {
         status: 429,
         headers: { "Content-Type": "application/json" }
@@ -46,7 +46,7 @@ export async function onRequestPost(context) {
       });
     }
 
-    // Stingrāka validācija: lauku tipi, max garums, attēla URL formāts
+    // Stingrāka validācija, pieļaujot arī IPFS URI
     if (typeof metadata.name !== 'string' || metadata.name.length > 100) {
       return new Response(JSON.stringify({ error: 'Invalid name (max 100 characters)' }), {
         status: 400,
@@ -59,15 +59,15 @@ export async function onRequestPost(context) {
         headers: { "Content-Type": "application/json" }
       });
     }
-    // Var pievienot URL validāciju: jāsākas ar http:// vai https://
-    if (!/^https?:\/\/.+/.test(metadata.image)) {
-      return new Response(JSON.stringify({ error: 'Image must be a valid HTTP/HTTPS URL' }), {
+    // Atļaujam http, https vai ipfs shēmas
+    if (!/^(https?|ipfs):\/\/.+/.test(metadata.image)) {
+      return new Response(JSON.stringify({ error: 'Image must be a valid HTTP/HTTPS or IPFS URL' }), {
         status: 400,
         headers: { "Content-Type": "application/json" }
       });
     }
     // Aizliegt papildu laukus (ja vēlas, var atļaut tikai noteiktus)
-    const allowedFields = ['name', 'image', 'description', 'attributes'];
+    const allowedFields = ['name', 'image', 'description', 'attributes', 'animation_url'];
     for (const key of Object.keys(metadata)) {
       if (!allowedFields.includes(key)) {
         delete metadata[key]; // vai atgriezt kļūdu
