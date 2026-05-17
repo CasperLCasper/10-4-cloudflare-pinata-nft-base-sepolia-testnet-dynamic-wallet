@@ -1,8 +1,7 @@
 // ============================================ //
-// IPFS FUNCTIONS
+// IPFS FUNCTIONS (server-side upload, nonce-safe)
 // ============================================ //
 
-import { apiFetch } from './api.js';
 import { showToast, showProgress, setProgress, hideProgress } from './ui.js';
 import { PINATA_GATEWAY } from './config.js';
 import { UI } from './state.js';
@@ -20,57 +19,45 @@ export function showIPFSPreview(imageURL, videoURL, metadataURL) {
   }
 }
 
+/**
+ * Augšupielādē failu caur mūsu servera aizsargāto gala punktu.
+ * Vairs neizmanto getUploadToken un tiešo Pinata izsaukumu.
+ */
 export async function uploadFileToIPFS(file) {
-  showToast('Getting upload permission...', 'info');
-  
-  const tokenRes = await apiFetch('/api/getUploadToken', {
-    method: 'POST'
-  });
-  
-  if (!tokenRes.ok) {
-    const errorText = await tokenRes.text();
-    console.error('GetUploadToken error:', tokenRes.status, errorText);
-    throw new Error(`Failed to get upload permission: ${tokenRes.status}`);
-  }
-  
-  const tokenData = await tokenRes.json();
-  
-  if (!tokenData.token) {
-    throw new Error("No token received from server");
-  }
-  
   showToast('Uploading file to IPFS...', 'info');
   
   const formData = new FormData();
   formData.append('file', file);
   
-  const uploadRes = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
+  const token = localStorage.getItem("auth_token");
+  const headers = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  
+  const res = await fetch('/api/uploadFileToIPFS', {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${tokenData.token}` },
+    headers,
     body: formData
   });
   
-  if (!uploadRes.ok) {
-    const errorText = await uploadRes.text();
-    console.error('Pinata upload error:', errorText);
-    throw new Error(`Pinata upload failed: ${uploadRes.status}`);
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => 'Unknown error');
+    throw new Error(`File upload failed: ${res.status} ${errorText}`);
   }
   
-  const result = await uploadRes.json();
-  if (!result.IpfsHash) throw new Error("Upload failed - no IPFS hash");
+  const result = await res.json();
+  if (!result.cid) throw new Error("Upload failed - no CID returned");
   
-  console.log("File uploaded:", result.IpfsHash);
-  
-  return { 
-    success: true,
-    ipfs: `ipfs://${result.IpfsHash}`,
-    cid: result.IpfsHash
-  };
+  console.log("File uploaded:", result.cid);
+  return result; // { ipfs: "ipfs://...", http: "...", cid: "..." }
 }
 
 export async function uploadMetadataToIPFS(metadata) {
   showToast('Preparing metadata...', 'info');
   
+  // Izmanto apiFetch no api.js, kas automātiski pievieno JWT galveni
+  const { apiFetch } = await import('./api.js');
   const response = await apiFetch('/api/uploadMetadataToIPFS', {
     method: 'POST',
     body: JSON.stringify(metadata)
