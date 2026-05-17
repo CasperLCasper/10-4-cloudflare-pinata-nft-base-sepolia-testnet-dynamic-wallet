@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { requireAuth } from "../_lib/auth.js";
 import { checkRateLimit } from "../_lib/rateLimit.js";
+import { getCache } from "../_lib/cache.js";
 
 const WALLET_NFT_ABI = [
   "function mint(address to, string memory jsonCID, bytes memory signature) external payable",
@@ -12,9 +13,7 @@ export async function onRequestPost(context) {
 
   try {
     const user = await requireAuth(request, env);
-    
     if (user instanceof Response) return user;
-    
     if (!user || !user.address) {
       return new Response(JSON.stringify({ success: false, error: "Unauthorized" }), {
         status: 401, headers: { "Content-Type": "application/json" }
@@ -38,7 +37,6 @@ export async function onRequestPost(context) {
     }
 
     const { wallet, metadataUri } = body;
-    
     if (!wallet || !metadataUri || !ethers.isAddress(wallet)) {
       return new Response(JSON.stringify({ success: false, error: 'Invalid input' }), {
         status: 400, headers: { "Content-Type": "application/json" }
@@ -50,6 +48,17 @@ export async function onRequestPost(context) {
         status: 403, headers: { "Content-Type": "application/json" }
       });
     }
+
+    // 🔒 Pārbaudām, vai metadataUri ir lietotāja pēdējais augšupielādētais CID
+    const lastUploadKey = `lastUploadCID:${user.address}`;
+    const lastCID = getCache(lastUploadKey, env);
+    if (!lastCID || lastCID !== metadataUri.replace("ipfs://", "")) {
+      return new Response(JSON.stringify({ success: false, error: 'Invalid or expired metadata CID. Please re-upload metadata.' }), {
+        status: 400, headers: { "Content-Type": "application/json" }
+      });
+    }
+    // Pēc veiksmīgas izmantošanas varam dzēst, lai novērstu atkārtotu izmantošanu (nav obligāti, bet drošāk)
+    // cache.delete(lastUploadKey); // jāimplementē cache.delete
 
     const CONTRACT_ADDRESS = env.CONTRACT_ADDRESS;
     const SERVER_PRIVATE_KEY = env.SERVER_PRIVATE_KEY;
@@ -73,13 +82,13 @@ export async function onRequestPost(context) {
       });
     }
 
+    // Clean CID (noņem ipfs://)
     let cleanCID = metadataUri.replace("ipfs://", "").split("/")[0];
     if (cleanCID.includes('http')) {
       const parts = cleanCID.split('/');
       cleanCID = parts[parts.length - 1];
     }
 
-    // 🔐 IDENTISKI VERCEL PARAKSTA ĢENERĒŠANAI
     const serverWallet = new ethers.Wallet(SERVER_PRIVATE_KEY);
     const messageHash = ethers.solidityPackedKeccak256(
       ["address", "string"],
