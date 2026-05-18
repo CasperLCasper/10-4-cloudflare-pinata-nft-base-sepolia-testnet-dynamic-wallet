@@ -49,10 +49,32 @@ export async function onRequestPost(context) {
       });
     }
 
-    // 🔒 Atslēga ar mazajiem burtiem, tāpat kā augšupielādē
+    // --- CID iegūšana no keša ---
     const lastUploadKey = `lastUploadCID:${user.address.toLowerCase()}`;
     const lastCID = await getCache(lastUploadKey, env);
-    if (!lastCID || lastCID !== metadataUri.replace("ipfs://", "")) {
+
+    // Normalizējam saņemto metadataUri, lai iegūtu tīru CID
+    let cleanMetadataCID = metadataUri.trim();
+    // Noņemam iespējamos priedēkļus
+    if (cleanMetadataCID.startsWith('ipfs://')) {
+      cleanMetadataCID = cleanMetadataCID.substring(7);
+    } else if (cleanMetadataCID.startsWith('https://')) {
+      const parts = cleanMetadataCID.split('/');
+      cleanMetadataCID = parts[parts.length - 1];
+    }
+    // Ja gadījumā palicis kas aiz CID (piem., /metadata.json), ņemam tikai pirmo daļu
+    if (cleanMetadataCID.includes('/')) {
+      cleanMetadataCID = cleanMetadataCID.split('/')[0];
+    }
+
+    console.log("MINT DEBUG:", {
+      lastUploadKey,
+      lastCID,
+      originalMetadataUri: metadataUri,
+      cleanMetadataCID
+    });
+
+    if (!lastCID || lastCID !== cleanMetadataCID) {
       return new Response(JSON.stringify({ success: false, error: 'Invalid or expired metadata CID. Please re-upload metadata.' }), {
         status: 400, headers: { "Content-Type": "application/json" }
       });
@@ -73,7 +95,7 @@ export async function onRequestPost(context) {
 
     const provider = new ethers.JsonRpcProvider(ALCHEMY_RPC_URL);
     const contract = new ethers.Contract(CONTRACT_ADDRESS, WALLET_NFT_ABI, provider);
-    
+
     let mintPrice;
     try {
       mintPrice = await contract.mintPrice();
@@ -83,22 +105,16 @@ export async function onRequestPost(context) {
       });
     }
 
-    // Clean CID
-    let cleanCID = metadataUri.replace("ipfs://", "").split("/")[0];
-    if (cleanCID.includes('http')) {
-      const parts = cleanCID.split('/');
-      cleanCID = parts[parts.length - 1];
-    }
-
+    // Līguma parakstam izmanto tīru CID
     const serverWallet = new ethers.Wallet(SERVER_PRIVATE_KEY);
     const messageHash = ethers.solidityPackedKeccak256(
       ["address", "string"],
-      [wallet, cleanCID]
+      [wallet, cleanMetadataCID]   // izmanto jau attīrītu CID
     );
     const signature = await serverWallet.signMessage(ethers.getBytes(messageHash));
 
     const iface = new ethers.Interface(WALLET_NFT_ABI);
-    const data = iface.encodeFunctionData('mint', [wallet, cleanCID, signature]);
+    const data = iface.encodeFunctionData('mint', [wallet, cleanMetadataCID, signature]);
 
     let estimatedGas;
     try {
@@ -111,9 +127,9 @@ export async function onRequestPost(context) {
       estimatedGas = (estimatedGas * 115n) / 100n;
     } catch (err) {
       console.error('Gas estimation failed:', err.message);
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: 'Transaction simulation failed: ' + err.message 
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Transaction simulation failed: ' + err.message
       }), {
         status: 400, headers: { "Content-Type": "application/json" }
       });
@@ -133,9 +149,9 @@ export async function onRequestPost(context) {
 
   } catch (error) {
     console.error("Server error:", error.message);
-    return new Response(JSON.stringify({ 
-      success: false, 
-      error: 'Server error: ' + error.message 
+    return new Response(JSON.stringify({
+      success: false,
+      error: 'Server error: ' + error.message
     }), {
       status: 500, headers: { "Content-Type": "application/json" }
     });
