@@ -82,8 +82,8 @@ export async function onRequestPost(context) {
     const result = await pinata.upload.public.json(metadata);
     console.log(`✅ User ${user.address} uploaded metadata: ${metadata.name}, cid: ${result.cid}`);
 
-    // Saglabājam CID kā pēdējo augšupielādi (derīgu 5 minūtes, lai varētu izmantot mint)
-    setCache(`lastUploadCID:${user.address}`, result.cid, env, 5 * 60 * 1000);
+    // ✅ Asinhronais setCache ar await – tagad CID tiks saglabāts Redis
+    await setCache(`lastUploadCID:${user.address}`, result.cid, env, 5 * 60 * 1000);
 
     return new Response(JSON.stringify({
       ipfs: `ipfs://${result.cid}`,
