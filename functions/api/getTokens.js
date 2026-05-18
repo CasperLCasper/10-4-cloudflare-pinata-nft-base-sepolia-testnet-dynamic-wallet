@@ -1,6 +1,7 @@
 import { ethers } from "ethers";
 import { getOptionalUser } from "../_lib/auth.js";
 import { checkRateLimit } from "../_lib/rateLimit.js";
+import { getCache, setCache } from "../_lib/cache.js";
 
 // Chain konfigurācija pielāgota, lai API_KEY tiktu nodots dinamiski
 const getChainConfig = (chain, apiKey) => {
@@ -86,6 +87,16 @@ export async function onRequestGet(context) {
       });
     }
 
+    // Cache pārbaude (jauns)
+    const cacheKey = `tokens_${safeAccount}_${chain}`;
+    const cached = await getCache(cacheKey, env);
+    if (cached) {
+      return new Response(JSON.stringify(cached), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
     const API_KEY = env.ALCHEMY_API_KEY;
     const BSCSCAN_API_KEY = env.BSCSCAN_API_KEY;
     
@@ -154,10 +165,12 @@ export async function onRequestGet(context) {
       }));
     }
 
-    return new Response(JSON.stringify({
-      tokens: tokens,
-      chain: chain
-    }), {
+    const result = { tokens, chain };
+
+    // Saglabājam kešā (jauns)
+    await setCache(cacheKey, result, env, 60000);
+
+    return new Response(JSON.stringify(result), {
       status: 200,
       headers: { "Content-Type": "application/json" }
     });
