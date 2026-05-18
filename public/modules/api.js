@@ -1,5 +1,5 @@
 // ============================================ //
-// API FUNCTIONS (with nonce support via X-Session-ID)
+// API FUNCTIONS (with JWT nonce support)
 // ============================================ //
 
 import { CONTRACT_ABI, getMintProvider } from './config.js';
@@ -9,15 +9,6 @@ import { MINT_CHAIN } from './chains.js';
 const DEFAULT_TIMEOUT_MS = 15000;
 const RETRY_COUNT = 2;
 const RETRY_DELAY_MS = 1000;
-
-// Sesijas ID – tiek ģenerēts vienreiz un izmantots visiem nonce pieprasījumiem
-let sessionId = null;
-function getSessionId() {
-  if (!sessionId) {
-    sessionId = crypto.randomUUID();
-  }
-  return sessionId;
-}
 
 // 🔥 Safe JSON parsing
 async function safeJson(response) {
@@ -143,24 +134,21 @@ export async function apiFetch(url, options = {}) {
 }
 
 // ============================================ //
-// NONCE HANDLING (jauns – izmanto X-Session-ID)
+// NONCE HANDLING (JWT nonce, bez papildu galvenēm)
 // ============================================ //
 
 /**
- * Iegūst nonce no servera pirms pieteikšanās.
- * Nosūta X-Session-ID galveni, lai saistītu nonce ar šo sesiju.
+ * Iegūst nonce (tagad JWT) no servera pirms pieteikšanās.
+ * Vairs neizmanto X-Session-ID – serveris atgriež pašpietiekamu JWT.
  */
 async function getNonce() {
-  const headers = {
-    'X-Session-ID': getSessionId()
-  };
-  const res = await fetch('/api/auth/nonce', { headers });
+  const res = await fetch('/api/auth/nonce');
   if (!res.ok) {
     const text = await safeErrorText(res);
     throw new Error(`Failed to get nonce: ${text}`);
   }
   const data = await safeJson(res);
-  return data.nonce;
+  return data.nonce; // tas ir JWT
 }
 
 // ============================================ //
@@ -171,22 +159,19 @@ export async function login(signer, account) {
   if (!signer) return false;
   
   try {
-    // 1. Iegūstam nonce no servera
-    const nonce = await getNonce();
+    // 1. Iegūstam nonce JWT no servera
+    const nonceToken = await getNonce();
     
-    // 2. Veidojam ziņojumu, kas sākas ar nonce
-    const message = `${nonce} - Login to NFT Wallet Visualizer`;
+    // 2. Veidojam ziņojumu, kas sākas ar šo JWT
+    const message = `${nonceToken} - Login to NFT Wallet Visualizer`;
     
     // 3. Parakstām ziņojumu ar maku
     const signature = await signer.signMessage(message);
     
-    // 4. Nosūtām uz serveri (ar to pašu X-Session-ID)
+    // 4. Nosūtām uz serveri (vairs nav X-Session-ID galvenes)
     const res = await fetchWithTimeout('/api/auth/login', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Session-ID': getSessionId()
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ address: account, message, signature })
     });
     
