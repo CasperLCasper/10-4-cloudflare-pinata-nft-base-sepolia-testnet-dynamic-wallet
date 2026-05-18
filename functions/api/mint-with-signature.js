@@ -64,17 +64,11 @@ export async function onRequestPost(context) {
       cleanMetadataCID = cleanMetadataCID.split('/')[0];
     }
 
-    // Ja CID nesakrīt, atgriežam detalizētu kļūdu
+    // Ja CID nesakrīt, parādām abus CID tieši kļūdā
     if (!lastCID || lastCID !== cleanMetadataCID) {
       return new Response(JSON.stringify({
         success: false,
-        error: 'Invalid or expired metadata CID. Please re-upload metadata.',
-        debug: {
-          expectedCID: lastCID || null,
-          receivedCID: cleanMetadataCID,
-          originalMetadataUri: metadataUri,
-          lastUploadKey: lastUploadKey
-        }
+        error: `CID mismatch. Expected: ${lastCID || 'null'}, Received: ${cleanMetadataCID}, Original: ${metadataUri}`
       }), {
         status: 400,
         headers: { "Content-Type": "application/json" }
