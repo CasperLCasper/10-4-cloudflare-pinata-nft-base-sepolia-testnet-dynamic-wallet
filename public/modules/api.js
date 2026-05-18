@@ -139,9 +139,12 @@ export async function apiFetch(url, options = {}) {
 
 /**
  * Iegūst nonce no servera pirms pieteikšanās.
+ * Izmanto credentials: 'include', lai nosūtītu/saņemtu sesijas sīkfailu.
  */
 async function getNonce() {
-  const res = await fetch('/api/auth/nonce');
+  const res = await fetch('/api/auth/nonce', {
+    credentials: 'include'   // 👈 nepieciešams sīkfailu apmaiņai
+  });
   if (!res.ok) {
     const text = await safeErrorText(res);
     throw new Error(`Failed to get nonce: ${text}`);
@@ -167,11 +170,12 @@ export async function login(signer, account) {
     // 3. Parakstām ziņojumu ar maku
     const signature = await signer.signMessage(message);
     
-    // 4. Nosūtām uz serveri
+    // 4. Nosūtām uz serveri (ar credentials: 'include', lai sūtītu sesijas sīkfailu)
     const res = await fetchWithTimeout('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address: account, message, signature })
+      body: JSON.stringify({ address: account, message, signature }),
+      credentials: 'include'   // 👈 sūta līdzi sesijas sīkfailu
     });
     
     if (!res.ok) {
