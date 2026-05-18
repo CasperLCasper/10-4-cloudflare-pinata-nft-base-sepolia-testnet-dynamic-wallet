@@ -1,7 +1,8 @@
 import { ethers } from 'ethers';
 import { requireAuth } from "../_lib/auth.js";
 import { checkRateLimit } from "../_lib/rateLimit.js";
-import { getCache, deleteCache } from "../_lib/cache.js";
+import { deleteCache } from "../_lib/cache.js";
+import { Redis } from "@upstash/redis";
 
 const WALLET_NFT_ABI = [
   "function mint(address to, string memory jsonCID, bytes memory signature) external payable",
@@ -49,9 +50,6 @@ export async function onRequestPost(context) {
       });
     }
 
-    const lastUploadKey = `lastUploadCID:${user.address.toLowerCase()}`;
-    const lastCID = await getCache(lastUploadKey, env);
-
     // Normalizējam saņemto metadataUri
     let cleanMetadataCID = metadataUri.trim();
     if (cleanMetadataCID.startsWith('ipfs://')) {
@@ -64,17 +62,43 @@ export async function onRequestPost(context) {
       cleanMetadataCID = cleanMetadataCID.split('/')[0];
     }
 
-    // Ja CID nesakrīt, parādām abus CID tieši kļūdā
+    const lastUploadKey = `lastUploadCID:${user.address.toLowerCase()}`;
+
+    // --- Tiešā Redis piekļuve atkļūdošanai ---
+    let lastCID = null;
+    let redisDebug = {};
+    if (env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN) {
+      const redis = new Redis({
+        url: env.UPSTASH_REDIS_REST_URL,
+        token: env.UPSTASH_REDIS_REST_TOKEN,
+      });
+      try {
+        const rawValue = await redis.get(lastUploadKey);
+        redisDebug.rawValue = rawValue;
+        if (rawValue !== null && rawValue !== undefined) {
+          lastCID = rawValue; // Upstash atgriež stringu, mēs to lietojam kā CID
+        } else {
+          redisDebug.info = 'Key not found in Redis';
+        }
+      } catch (e) {
+        redisDebug.error = e.message;
+      }
+    } else {
+      redisDebug.info = 'Redis env vars missing';
+    }
+
     if (!lastCID || lastCID !== cleanMetadataCID) {
       return new Response(JSON.stringify({
         success: false,
-        error: `CID mismatch. Expected: ${lastCID || 'null'}, Received: ${cleanMetadataCID}, Original: ${metadataUri}`
+        error: `CID mismatch. Expected: ${lastCID || 'null'}, Received: ${cleanMetadataCID}, Original: ${metadataUri}`,
+        redisDebug: redisDebug
       }), {
         status: 400,
         headers: { "Content-Type": "application/json" }
       });
     }
 
+    // Dzēšam CID tikai pēc veiksmīgas salīdzināšanas
     await deleteCache(lastUploadKey, env);
 
     const CONTRACT_ADDRESS = env.CONTRACT_ADDRESS;
