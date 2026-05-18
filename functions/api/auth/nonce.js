@@ -1,24 +1,28 @@
-import { setCache } from "../../_lib/cache.js";
+import { SignJWT } from "jose";
 
-const NONCE_TTL_MS = 5 * 60 * 1000;
+const NONCE_TTL = "5m"; // 5 minūtes
 
 export async function onRequestGet(context) {
-  const { request, env } = context;
+  const { env } = context;
 
-  const sessionId = request.headers.get("X-Session-ID");
-  if (!sessionId) {
-    return new Response(JSON.stringify({ error: "Missing X-Session-ID header" }), {
-      status: 400,
+  if (!env.JWT_SECRET) {
+    return new Response(JSON.stringify({ error: "Server configuration error" }), {
+      status: 500,
       headers: { "Content-Type": "application/json" },
     });
   }
 
   const nonce = crypto.randomUUID();
-  const key = `nonce:${sessionId}`;
+  const secret = new TextEncoder().encode(env.JWT_SECRET);
 
-  await setCache(key, nonce, env, NONCE_TTL_MS);
+  // Izveido JWT, kas satur nonci un ir derīgs 5 minūtes
+  const token = await new SignJWT({ nonce })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(NONCE_TTL)
+    .sign(secret);
 
-  return new Response(JSON.stringify({ nonce }), {
+  return new Response(JSON.stringify({ nonce: token }), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
