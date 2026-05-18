@@ -46,7 +46,7 @@ export async function onRequestPost(context) {
       });
     }
 
-    // Stingrāka validācija, pieļaujot arī IPFS URI
+    // Validācija
     if (typeof metadata.name !== 'string' || metadata.name.length > 100) {
       return new Response(JSON.stringify({ error: 'Invalid name (max 100 characters)' }), {
         status: 400,
@@ -59,18 +59,17 @@ export async function onRequestPost(context) {
         headers: { "Content-Type": "application/json" }
       });
     }
-    // Atļaujam http, https vai ipfs shēmas
     if (!/^(https?|ipfs):\/\/.+/.test(metadata.image)) {
       return new Response(JSON.stringify({ error: 'Image must be a valid HTTP/HTTPS or IPFS URL' }), {
         status: 400,
         headers: { "Content-Type": "application/json" }
       });
     }
-    // Aizliegt papildu laukus (ja vēlas, var atļaut tikai noteiktus)
+
     const allowedFields = ['name', 'image', 'description', 'attributes', 'animation_url'];
     for (const key of Object.keys(metadata)) {
       if (!allowedFields.includes(key)) {
-        delete metadata[key]; // vai atgriezt kļūdu
+        delete metadata[key];
       }
     }
 
@@ -82,7 +81,7 @@ export async function onRequestPost(context) {
     const result = await pinata.upload.public.json(metadata);
     console.log(`✅ User ${user.address} uploaded metadata: ${metadata.name}, cid: ${result.cid}`);
 
-    // ✅ Asinhronais setCache ar await – tagad CID tiks saglabāts Redis
+    // ✅ Obligāti jābūt await – saglabā CID Redis uz 5 minūtēm
     await setCache(`lastUploadCID:${user.address}`, result.cid, env, 5 * 60 * 1000);
 
     return new Response(JSON.stringify({
