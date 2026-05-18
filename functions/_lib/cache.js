@@ -18,7 +18,16 @@ export async function getCache(key, env) {
   if (!r) return null;
   try {
     const value = await r.get(key);
-    return value ? JSON.parse(value) : null;
+    if (value === null || value === undefined) return null;
+    // Ja izskatās pēc JSON, parsējam, citādi atgriežam kā stringu
+    if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value; // ja parsēšana neizdodas, atgriežam kā ir
+      }
+    }
+    return value;
   } catch (e) {
     console.error("Redis getCache error:", e);
     return null;
@@ -29,7 +38,8 @@ export async function setCache(key, value, env, ttlMs = 60000) {
   const r = getRedis(env);
   if (!r) return;
   try {
-    await r.set(key, JSON.stringify(value), { ex: Math.ceil(ttlMs / 1000) });
+    const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+    await r.set(key, serialized, { ex: Math.ceil(ttlMs / 1000) });
   } catch (e) {
     console.error("Redis setCache error:", e);
   }
