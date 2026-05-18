@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 import { requireAuth } from "../_lib/auth.js";
 import { checkRateLimit } from "../_lib/rateLimit.js";
-import { getCache } from "../_lib/cache.js";
+import { getCache, deleteCache } from "../_lib/cache.js";
 
 const WALLET_NFT_ABI = [
   "function mint(address to, string memory jsonCID, bytes memory signature) external payable",
@@ -49,9 +49,9 @@ export async function onRequestPost(context) {
       });
     }
 
-    // 🔒 Pārbaudām, vai metadataUri ir lietotāja pēdējais augšupielādētais CID
+    // 🔒 Pārbaudām, vai metadataUri ir lietotāja pēdējais augšupielādētais CID (asinhrons)
     const lastUploadKey = `lastUploadCID:${user.address}`;
-    const lastCID = getCache(lastUploadKey, env);
+    const lastCID = await getCache(lastUploadKey, env);
     if (!lastCID || lastCID !== metadataUri.replace("ipfs://", "")) {
       return new Response(JSON.stringify({ success: false, error: 'Invalid or expired metadata CID. Please re-upload metadata.' }), {
         status: 400, headers: { "Content-Type": "application/json" }
@@ -86,6 +86,9 @@ export async function onRequestPost(context) {
       const parts = cleanCID.split('/');
       cleanCID = parts[parts.length - 1];
     }
+
+    // Pēc CID iegūšanas varam dzēst to no keša, lai novērstu atkārtotu izmantošanu
+    await deleteCache(lastUploadKey, env);
 
     const serverWallet = new ethers.Wallet(SERVER_PRIVATE_KEY);
     const messageHash = ethers.solidityPackedKeccak256(
