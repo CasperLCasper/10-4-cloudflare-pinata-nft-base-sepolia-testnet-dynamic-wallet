@@ -20,7 +20,7 @@ export async function onRequestPost(context) {
       });
     }
 
-    const rateKey = `mint:${user.address}`;
+    const rateKey = `mint:${user.address.toLowerCase()}`;
     if (!(await checkRateLimit({ key: rateKey, limit: 5, windowMs: 60000 }, env))) {
       return new Response(JSON.stringify({ success: false, error: 'Too many requests' }), {
         status: 429, headers: { "Content-Type": "application/json" }
@@ -49,8 +49,8 @@ export async function onRequestPost(context) {
       });
     }
 
-    // ✅ Obligāti jābūt await – nolasa pēdējo CID no Redis
-    const lastUploadKey = `lastUploadCID:${user.address}`;
+    // 🔒 Atslēga ar mazajiem burtiem, tāpat kā augšupielādē
+    const lastUploadKey = `lastUploadCID:${user.address.toLowerCase()}`;
     const lastCID = await getCache(lastUploadKey, env);
     if (!lastCID || lastCID !== metadataUri.replace("ipfs://", "")) {
       return new Response(JSON.stringify({ success: false, error: 'Invalid or expired metadata CID. Please re-upload metadata.' }), {
@@ -58,7 +58,7 @@ export async function onRequestPost(context) {
       });
     }
 
-    // Dzēšam CID, lai nevarētu izmantot atkārtoti (asinhrons)
+    // Dzēšam CID, lai nevarētu izmantot atkārtoti
     await deleteCache(lastUploadKey, env);
 
     const CONTRACT_ADDRESS = env.CONTRACT_ADDRESS;
