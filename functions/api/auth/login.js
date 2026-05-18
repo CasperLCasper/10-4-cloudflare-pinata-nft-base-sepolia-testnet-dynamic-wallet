@@ -1,5 +1,5 @@
 import { verifySignature, createToken } from "../../_lib/auth.js";
-import { getCache, deleteCache } from "../../_lib/cache.js";
+import { jwtVerify } from "jose";
 
 export async function onRequestPost(context) {
   try {
@@ -21,35 +21,39 @@ export async function onRequestPost(context) {
       });
     }
 
-    const sessionId = context.request.headers.get("X-Session-ID");
-    if (!sessionId) {
-      return new Response(JSON.stringify({ error: "Missing X-Session-ID header" }), {
+    // Nonce tagad ir JWT. Tas atrodas ziņojuma sākumā, pirms " - ".
+    const parts = message.split(" - ", 2);
+    if (parts.length !== 2) {
+      return new Response(JSON.stringify({ error: "Invalid message format" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });
     }
 
-    const nonceKey = `nonce:${sessionId}`;
-    const storedNonce = await getCache(nonceKey, context.env);
+    const nonceToken = parts[0];
+    // messageText (piem., "Login to NFT Wallet Visualizer") nav obligāti jāpārbauda
 
-    if (!storedNonce) {
-      return new Response(JSON.stringify({ error: "Nonce expired or missing. Request a new one." }), {
+    // Verificējam nonce JWT
+    let nonce;
+    try {
+      const secret = new TextEncoder().encode(context.env?.JWT_SECRET || "");
+      const { payload } = await jwtVerify(nonceToken, secret);
+      nonce = payload.nonce;
+    } catch {
+      return new Response(JSON.stringify({ error: "Nonce expired or invalid. Request a new one." }), {
         status: 401,
         headers: { "Content-Type": "application/json" },
       });
     }
 
-    if (!message.startsWith(storedNonce)) {
-      return new Response(JSON.stringify({ error: "Invalid nonce in message" }), {
+    if (!nonce) {
+      return new Response(JSON.stringify({ error: "Invalid nonce" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },
       });
     }
 
-    // Dzēšam nonce, lai to nevarētu izmantot atkārtoti
-    await deleteCache(nonceKey, context.env);
-
-    // Verificējam parakstu
+    // Verificējam maka parakstu (joprojām validējam visu ziņojumu)
     const isValid = verifySignature(address, message, signature);
     if (!isValid) {
       return new Response(JSON.stringify({ error: "Invalid signature" }), {
@@ -58,7 +62,7 @@ export async function onRequestPost(context) {
       });
     }
 
-    // Izveidojam JWT
+    // Izveidojam lietotāja JWT
     const token = await createToken(address, context.env);
 
     return new Response(JSON.stringify({ token }), {
