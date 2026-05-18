@@ -21,16 +21,10 @@ export async function onRequestPost(context) {
       });
     }
 
-    // 1. Nolasām sesijas ID no sīkfaila
-    const cookieHeader = context.request.headers.get("Cookie") || "";
-    const cookies = Object.fromEntries(
-      cookieHeader.split("; ").map(c => c.split("="))
-    );
-    const sessionId = cookies.session_id;
-
+    const sessionId = context.request.headers.get("X-Session-ID");
     if (!sessionId) {
-      return new Response(JSON.stringify({ error: "Session not found. Request a new nonce." }), {
-        status: 401,
+      return new Response(JSON.stringify({ error: "Missing X-Session-ID header" }), {
+        status: 400,
         headers: { "Content-Type": "application/json" },
       });
     }
@@ -45,7 +39,6 @@ export async function onRequestPost(context) {
       });
     }
 
-    // 2. Pārbaudām, vai ziņojums sākas ar nonce
     if (!message.startsWith(storedNonce)) {
       return new Response(JSON.stringify({ error: "Invalid nonce in message" }), {
         status: 401,
@@ -53,10 +46,10 @@ export async function onRequestPost(context) {
       });
     }
 
-    // 3. Dzēšam nonce, lai nevarētu izmantot atkārtoti
+    // Dzēšam nonce, lai to nevarētu izmantot atkārtoti
     await deleteCache(nonceKey, context.env);
 
-    // 4. Verificējam parakstu
+    // Verificējam parakstu
     const isValid = verifySignature(address, message, signature);
     if (!isValid) {
       return new Response(JSON.stringify({ error: "Invalid signature" }), {
@@ -65,21 +58,14 @@ export async function onRequestPost(context) {
       });
     }
 
-    // 5. Izveidojam JWT
+    // Izveidojam JWT
     const token = await createToken(address, context.env);
-
-    // 6. Pēc veiksmīgas pieslēgšanās varam izdzēst sesijas sīkfailu (vai atstāt)
-    const headers = new Headers();
-    headers.set("Content-Type", "application/json");
-    headers.set(
-      "Set-Cookie",
-      `session_id=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
-    );
 
     return new Response(JSON.stringify({ token }), {
       status: 200,
-      headers,
+      headers: { "Content-Type": "application/json" },
     });
+
   } catch (err) {
     console.error("Login error:", err.message);
     return new Response(JSON.stringify({ error: "Login failed: " + err.message }), {
