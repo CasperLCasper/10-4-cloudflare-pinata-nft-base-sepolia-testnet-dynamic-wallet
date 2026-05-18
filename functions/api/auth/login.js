@@ -1,28 +1,6 @@
 import { verifySignature, createToken } from "../../_lib/auth.js";
-import { setCache, getCache, deleteCache } from "../../_lib/cache.js";
+import { getCache, deleteCache } from "../../_lib/cache.js";
 
-const NONCE_TTL_MS = 5 * 60 * 1000;
-
-function generateNonce() {
-  return crypto.randomUUID();
-}
-
-// GET /api/auth/nonce – izsniedz nonce
-export async function onRequestGet(context) {
-  const nonce = generateNonce();
-  const ip = context.request.headers.get("CF-Connecting-IP") || "unknown";
-  const key = `nonce:${ip}`;
-  
-  // ✅ Asinhronais izsaukums ar await
-  await setCache(key, nonce, context.env, NONCE_TTL_MS);
-  
-  return new Response(JSON.stringify({ nonce }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-// POST /api/auth/login – pārbauda nonce un izsniedz JWT
 export async function onRequestPost(context) {
   try {
     let body;
@@ -43,12 +21,23 @@ export async function onRequestPost(context) {
       });
     }
 
-    const ip = context.request.headers.get("CF-Connecting-IP") || "unknown";
-    const nonceKey = `nonce:${ip}`;
-    
-    // ✅ Asinhronais izsaukums ar await
+    // 1. Nolasām sesijas ID no sīkfaila
+    const cookieHeader = context.request.headers.get("Cookie") || "";
+    const cookies = Object.fromEntries(
+      cookieHeader.split("; ").map(c => c.split("="))
+    );
+    const sessionId = cookies.session_id;
+
+    if (!sessionId) {
+      return new Response(JSON.stringify({ error: "Session not found. Request a new nonce." }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const nonceKey = `nonce:${sessionId}`;
     const storedNonce = await getCache(nonceKey, context.env);
-    
+
     if (!storedNonce) {
       return new Response(JSON.stringify({ error: "Nonce expired or missing. Request a new one." }), {
         status: 401,
@@ -56,6 +45,7 @@ export async function onRequestPost(context) {
       });
     }
 
+    // 2. Pārbaudām, vai ziņojums sākas ar nonce
     if (!message.startsWith(storedNonce)) {
       return new Response(JSON.stringify({ error: "Invalid nonce in message" }), {
         status: 401,
@@ -63,10 +53,10 @@ export async function onRequestPost(context) {
       });
     }
 
-    // ✅ Dzēšam nonce, lai to nevarētu izmantot atkārtoti
+    // 3. Dzēšam nonce, lai nevarētu izmantot atkārtoti
     await deleteCache(nonceKey, context.env);
 
-    // Verificējam parakstu (bez env parametra, kā mūsu atjauninātajā auth.js)
+    // 4. Verificējam parakstu
     const isValid = verifySignature(address, message, signature);
     if (!isValid) {
       return new Response(JSON.stringify({ error: "Invalid signature" }), {
@@ -75,13 +65,21 @@ export async function onRequestPost(context) {
       });
     }
 
+    // 5. Izveidojam JWT
     const token = await createToken(address, context.env);
+
+    // 6. Pēc veiksmīgas pieslēgšanās varam izdzēst sesijas sīkfailu (vai atstāt)
+    const headers = new Headers();
+    headers.set("Content-Type", "application/json");
+    headers.set(
+      "Set-Cookie",
+      `session_id=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
+    );
 
     return new Response(JSON.stringify({ token }), {
       status: 200,
-      headers: { "Content-Type": "application/json" },
+      headers,
     });
-
   } catch (err) {
     console.error("Login error:", err.message);
     return new Response(JSON.stringify({ error: "Login failed: " + err.message }), {
