@@ -1,5 +1,5 @@
 // ============================================ //
-// API FUNCTIONS (with nonce support)
+// API FUNCTIONS (with nonce support via X-Session-ID)
 // ============================================ //
 
 import { CONTRACT_ABI, getMintProvider } from './config.js';
@@ -9,6 +9,15 @@ import { MINT_CHAIN } from './chains.js';
 const DEFAULT_TIMEOUT_MS = 15000;
 const RETRY_COUNT = 2;
 const RETRY_DELAY_MS = 1000;
+
+// Sesijas ID – tiek ģenerēts vienreiz un izmantots visiem nonce pieprasījumiem
+let sessionId = null;
+function getSessionId() {
+  if (!sessionId) {
+    sessionId = crypto.randomUUID();
+  }
+  return sessionId;
+}
 
 // 🔥 Safe JSON parsing
 async function safeJson(response) {
@@ -134,17 +143,18 @@ export async function apiFetch(url, options = {}) {
 }
 
 // ============================================ //
-// NONCE HANDLING (jauns)
+// NONCE HANDLING (jauns – izmanto X-Session-ID)
 // ============================================ //
 
 /**
  * Iegūst nonce no servera pirms pieteikšanās.
- * Izmanto credentials: 'include', lai nosūtītu/saņemtu sesijas sīkfailu.
+ * Nosūta X-Session-ID galveni, lai saistītu nonce ar šo sesiju.
  */
 async function getNonce() {
-  const res = await fetch('/api/auth/nonce', {
-    credentials: 'include'   // 👈 nepieciešams sīkfailu apmaiņai
-  });
+  const headers = {
+    'X-Session-ID': getSessionId()
+  };
+  const res = await fetch('/api/auth/nonce', { headers });
   if (!res.ok) {
     const text = await safeErrorText(res);
     throw new Error(`Failed to get nonce: ${text}`);
@@ -170,12 +180,14 @@ export async function login(signer, account) {
     // 3. Parakstām ziņojumu ar maku
     const signature = await signer.signMessage(message);
     
-    // 4. Nosūtām uz serveri (ar credentials: 'include', lai sūtītu sesijas sīkfailu)
+    // 4. Nosūtām uz serveri (ar to pašu X-Session-ID)
     const res = await fetchWithTimeout('/api/auth/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address: account, message, signature }),
-      credentials: 'include'   // 👈 sūta līdzi sesijas sīkfailu
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-ID': getSessionId()
+      },
+      body: JSON.stringify({ address: account, message, signature })
     });
     
     if (!res.ok) {
