@@ -46,17 +46,15 @@ const getChainConfig = (chain, apiKey) => {
 
 // Izmantojam onRequestGet tikai GET pieprasījumiem
 export async function onRequestGet(context) {
-  let chain = 'sepolia'; // Inicializējam mainīgo kļūdu žurnālam (catch blokam)
+  let chain = 'sepolia';
 
   try {
     const { request, env } = context;
 
-    // 1. URL parametru nolasīšana no Cloudflare request
     const url = new URL(request.url);
     const accountParam = url.searchParams.get("account");
     chain = url.searchParams.get("chain") || 'sepolia';
 
-    // 2. Lietotāja sesijas noteikšana - TAGAD AR await
     const user = await getOptionalUser(request, env);
     let account = accountParam || (user ? user.address : null);
 
@@ -77,18 +75,17 @@ export async function onRequestGet(context) {
       });
     }
 
-    // 3. Rate limiting ar Cloudflare IP noteikšanu
+    // Rate limiting ar await - tagad strādā arī ar Redis!
     const ip = request.headers.get("CF-Connecting-IP") || "unknown";
     const key = user ? `user_${user.address}_tokens_${chain}` : `ip_${ip}_tokens_${chain}`;
 
-    if (!checkRateLimit({ key }, env)) {
+    if (!(await checkRateLimit({ key }, env))) {
       return new Response(JSON.stringify({ error: "Too many requests" }), {
         status: 429,
         headers: { "Content-Type": "application/json" }
       });
     }
 
-    // 4. Vides mainīgo nolasīšana no context.env
     const API_KEY = env.ALCHEMY_API_KEY;
     const BSCSCAN_API_KEY = env.BSCSCAN_API_KEY;
     
@@ -97,7 +94,6 @@ export async function onRequestGet(context) {
     let tokens = [];
     
     if (chainConfig.type === 'bscscan') {
-      // BSCScan API pieprasījums
       const bscUrl = `${chainConfig.url}?module=account&action=tokenbalance&address=${safeAccount}&tag=latest&apikey=${BSCSCAN_API_KEY}`;
       const response = await fetch(bscUrl);
       const data = await response.json();
@@ -132,7 +128,6 @@ export async function onRequestGet(context) {
         }
       }
     } else {
-      // Alchemy POST RPC pieprasījums
       const response = await fetch(chainConfig.url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -155,7 +150,7 @@ export async function onRequestGet(context) {
       tokens = balances.map(t => ({
         contract: t.contractAddress,
         balance: t.tokenBalance,
-        decimalBalance: BigInt(t.tokenBalance).toString()
+        decimalBalance: BigInt(t.tokenBalance).toString()  // BigInt -> string, jo JSON neserializē BigInt
       }));
     }
 
