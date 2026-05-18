@@ -108,7 +108,8 @@ export async function onRequestGet(context) {
       ? `nfts_${safeAccount}_${safeContract}_${chain}`
       : `nfts_${safeAccount}_${chain}`;
 
-    const cached = getCache(cacheKey, env);
+    // ✅ Asinhronais getCache ar await
+    const cached = await getCache(cacheKey, env);
     if (cached) {
       return new Response(JSON.stringify(cached), {
         status: 200,
@@ -160,7 +161,9 @@ export async function onRequestGet(context) {
     }));
 
     const result = { result: { nfts: formatted }, chain: chain };
-    setCache(cacheKey, result, env);
+    
+    // ✅ Asinhronais setCache ar await
+    await setCache(cacheKey, result, env);
 
     return new Response(JSON.stringify(result), {
       status: 200,
