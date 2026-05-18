@@ -21,7 +21,7 @@ export async function onRequestPost(context) {
     }
 
     const rateKey = `mint:${user.address}`;
-    if (!checkRateLimit({ key: rateKey, limit: 5, windowMs: 60000 }, env)) {
+    if (!(await checkRateLimit({ key: rateKey, limit: 5, windowMs: 60000 }, env))) {
       return new Response(JSON.stringify({ success: false, error: 'Too many requests' }), {
         status: 429, headers: { "Content-Type": "application/json" }
       });
@@ -57,8 +57,6 @@ export async function onRequestPost(context) {
         status: 400, headers: { "Content-Type": "application/json" }
       });
     }
-    // Pēc veiksmīgas izmantošanas varam dzēst, lai novērstu atkārtotu izmantošanu (nav obligāti, bet drošāk)
-    // cache.delete(lastUploadKey); // jāimplementē cache.delete
 
     const CONTRACT_ADDRESS = env.CONTRACT_ADDRESS;
     const SERVER_PRIVATE_KEY = env.SERVER_PRIVATE_KEY;
