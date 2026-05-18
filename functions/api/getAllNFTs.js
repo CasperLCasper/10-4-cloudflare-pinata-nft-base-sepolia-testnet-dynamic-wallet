@@ -50,19 +50,16 @@ const MAX_PAGES = 5;
 
 // Izmantojam onRequestGet, lai apstrādātu tikai GET pieprasījumus
 export async function onRequestGet(context) {
-  // Inicializējam mainīgo, lai tas būtu pieejams arī catch blokā logiem
   let chain = 'sepolia'; 
 
   try {
     const { request, env } = context;
     
-    // 1. Cloudflare Query parametru nolasīšana no URL
     const url = new URL(request.url);
     const accountParam = url.searchParams.get("account");
     const contract = url.searchParams.get("contract");
     chain = url.searchParams.get("chain") || 'sepolia';
 
-    // 2. Lietotāja sesijas iegūšana (nododam request un env uz _lib) - TAGAD AR await
     const user = await getOptionalUser(request, env);
     let account = accountParam || (user ? user.address : null); 
 
@@ -73,7 +70,6 @@ export async function onRequestGet(context) {
       });
     }
 
-    // Adrešu validācija ar ethers
     let safeAccount;
     try {
       safeAccount = ethers.getAddress(account);
@@ -96,18 +92,18 @@ export async function onRequestGet(context) {
       }
     }
 
-    // 3. Rate limit un IP noteikšana Cloudflare veidā
+    // Rate limiting ar await - tagad strādā arī ar Redis!
     const ip = request.headers.get("CF-Connecting-IP") || "unknown";
     const rateKey = user ? `user_${user.address}_nfts_${chain}` : `ip_${ip}_nfts_${chain}`;
 
-    if (!checkRateLimit({ key: rateKey }, env)) {
+    if (!(await checkRateLimit({ key: rateKey }, env))) {
       return new Response(JSON.stringify({ error: "Too many requests" }), {
         status: 429,
         headers: { "Content-Type": "application/json" }
       });
     }
 
-    // 4. Cache pārbaude
+    // Cache pārbaude
     const cacheKey = safeContract
       ? `nfts_${safeAccount}_${safeContract}_${chain}`
       : `nfts_${safeAccount}_${chain}`;
@@ -120,7 +116,6 @@ export async function onRequestGet(context) {
       });
     }
 
-    // 5. Vides mainīgo paņemšana no Cloudflare context.env
     const API_KEY = env.ALCHEMY_API_KEY;
     const BSCSCAN_API_KEY = env.BSCSCAN_API_KEY;
     
@@ -152,7 +147,6 @@ export async function onRequestGet(context) {
       }
     }
 
-    // Formatēšana
     const formatted = allNFTs.map(nft => ({
       contract: {
         address: nft.contract?.address || "",
