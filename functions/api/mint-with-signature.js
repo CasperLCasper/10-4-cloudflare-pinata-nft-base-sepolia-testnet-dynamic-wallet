@@ -49,7 +49,7 @@ export async function onRequestPost(context) {
       });
     }
 
-    // 🔒 Pārbaudām, vai metadataUri ir lietotāja pēdējais augšupielādētais CID (asinhrons)
+    // ✅ Obligāti jābūt await – nolasa pēdējo CID no Redis
     const lastUploadKey = `lastUploadCID:${user.address}`;
     const lastCID = await getCache(lastUploadKey, env);
     if (!lastCID || lastCID !== metadataUri.replace("ipfs://", "")) {
@@ -57,6 +57,9 @@ export async function onRequestPost(context) {
         status: 400, headers: { "Content-Type": "application/json" }
       });
     }
+
+    // Dzēšam CID, lai nevarētu izmantot atkārtoti (asinhrons)
+    await deleteCache(lastUploadKey, env);
 
     const CONTRACT_ADDRESS = env.CONTRACT_ADDRESS;
     const SERVER_PRIVATE_KEY = env.SERVER_PRIVATE_KEY;
@@ -80,15 +83,12 @@ export async function onRequestPost(context) {
       });
     }
 
-    // Clean CID (noņem ipfs://)
+    // Clean CID
     let cleanCID = metadataUri.replace("ipfs://", "").split("/")[0];
     if (cleanCID.includes('http')) {
       const parts = cleanCID.split('/');
       cleanCID = parts[parts.length - 1];
     }
-
-    // Pēc CID iegūšanas varam dzēst to no keša, lai novērstu atkārtotu izmantošanu
-    await deleteCache(lastUploadKey, env);
 
     const serverWallet = new ethers.Wallet(SERVER_PRIVATE_KEY);
     const messageHash = ethers.solidityPackedKeccak256(
