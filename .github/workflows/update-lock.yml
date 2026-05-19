@@ -3,6 +3,8 @@ name: Update package-lock.json
 on:
   workflow_dispatch:   # ļauj manuāli palaist no GitHub Actions paneļa
 
+permissions: write-all
+
 jobs:
   update-lock:
     runs-on: ubuntu-latest
