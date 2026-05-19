@@ -4,7 +4,32 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Dynamic Wallet Visualizer - Multichain</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  
+  <!-- Lokāli mitināts Inter fonts (aizstāj Google Fonts) -->
+  <style>
+    @font-face {
+      font-family: 'Inter';
+      font-style: normal;
+      font-weight: 400;
+      src: local(''),
+           url('/fonts/inter-v13-latin-regular.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'Inter';
+      font-style: normal;
+      font-weight: 600;
+      src: local(''),
+           url('/fonts/inter-v13-latin-600.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'Inter';
+      font-style: normal;
+      font-weight: 700;
+      src: local(''),
+           url('/fonts/inter-v13-latin-700.woff2') format('woff2');
+    }
+  </style>
+  
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -16,7 +41,6 @@
     <header class="site-header">
       <svg xmlns="http://www.w3.org/2000/svg" width="160" height="40" viewBox="0 0 158.74999 37.041668" class="logo">
         <text xml:space="preserve" style="font-style:normal;font-weight:normal;font-size:14.1111px;line-height:1.25;font-family:sans-serif;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.264583;" x="8.8499603" y="31.493832">
-          <!-- ✅ Pievienots 'monospace' kā rezerves fonts -->
           <tspan x="8.8499603" y="31.493832" style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:14.1111px;font-family:'DejaVu Sans Mono', monospace;-inkscape-font-specification:'DejaVu Sans Mono';stroke-width:0.264583;fill:#ffffff;">V I R S B U R T S</tspan>
         </text>
         <rect style="fill:#ffffff;stroke-width:0.264583" width="3.1013243" height="15.020124" x="5.9450045" y="3.8351295" />
