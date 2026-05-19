@@ -100,7 +100,11 @@ export async function uploadVideoToIPFS(stream, duration = 15000) {
         resolve(await uploadFileToIPFS(file)); 
       } catch (error) { reject(error); }
     };
-    recorder.onerror = (err) => reject(err);
+    // ✅ Izlabots: vienmēr noraidām ar Error objektu
+    recorder.onerror = (event) => {
+      const error = event?.error instanceof Error ? event.error : new Error('Recording failed');
+      reject(error);
+    };
     recorder.start(1000);
     setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, duration);
   });
