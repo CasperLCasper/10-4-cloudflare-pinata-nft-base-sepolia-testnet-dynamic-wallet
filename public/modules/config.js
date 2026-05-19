@@ -2,7 +2,6 @@
 // CONFIGURATION
 // ============================================ //
 
-import { ethers } from 'ethers';
 import { getRpcUrl } from './chains.js';
 
 export const PINATA_GATEWAY = "https://gateway.pinata.cloud/ipfs/";
