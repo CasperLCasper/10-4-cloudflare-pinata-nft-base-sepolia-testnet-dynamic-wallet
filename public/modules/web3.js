@@ -2,7 +2,6 @@
 // WEB3 FUNCTIONS
 // ============================================ //
 
-import { ethers } from 'ethers';
 import { VIZ_CHAINS, MINT_CHAIN, getAllRpcUrls } from './chains.js';
 import { UI } from './state.js';
 import { showToast, setButtonLoading, showProgress, hideProgress } from './ui.js';
