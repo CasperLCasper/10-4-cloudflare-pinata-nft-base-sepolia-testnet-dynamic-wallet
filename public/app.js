@@ -2,7 +2,6 @@
 // MAIN APP - MULTICHAIN WALLET VISUALIZER
 // ============================================ //
 
-import { ethers } from 'ethers';
 import { AppState, initUI, UI } from './modules/state.js';
 import { VIZ_CHAINS, MINT_CHAIN } from './modules/chains.js';
 import { PINATA_GATEWAY, CONTRACT_ABI, LOW_POWER_MODE } from './modules/config.js';
