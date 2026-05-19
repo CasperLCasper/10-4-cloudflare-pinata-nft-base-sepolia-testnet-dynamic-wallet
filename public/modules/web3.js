@@ -101,8 +101,9 @@ async function updateBalanceDisplay(account) {
     const mintPriceWei = await contract.mintPrice();
     const balanceWei = await baseProvider.getBalance(account);
     
-    const balanceEth = parseFloat(ethers.formatEther(balanceWei)).toFixed(5);
-    const mintPriceEth = parseFloat(ethers.formatEther(mintPriceWei)).toFixed(5);
+    // ✅ Izlabots: Number.parseFloat
+    const balanceEth = Number.parseFloat(ethers.formatEther(balanceWei)).toFixed(5);
+    const mintPriceEth = Number.parseFloat(ethers.formatEther(mintPriceWei)).toFixed(5);
     
     if (balanceWei >= mintPriceWei) {
       balanceDisplay.textContent = `✅ Base: ${balanceEth} ETH (enough to mint)`;
