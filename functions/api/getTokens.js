@@ -121,7 +121,7 @@ export async function onRequestGet(context) {
               tokenMap.set(tx.contractAddress, {
                 contract: tx.contractAddress,
                 symbol: tx.tokenSymbol,
-                decimals: parseInt(tx.tokenDecimal),
+                decimals: Number.parseInt(tx.tokenDecimal),
                 balance: "0x0"
               });
             }
