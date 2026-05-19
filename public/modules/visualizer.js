@@ -46,7 +46,8 @@ export function cleanup(app) {
 export function hashStringToInt(str, mod = 1000) { 
   let h = 2166136261 >>> 0; 
   for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
+    // Izmantojam codePointAt, lai pareizi apstrādātu pilnus Unicode simbolus
+    h ^= str.codePointAt(i);
     h = Math.imul(h, 16777619) >>> 0;
   } 
   return h % mod; 
@@ -286,7 +287,6 @@ export async function renderSnapshot(app, chain) {
   app.particleCache.clear();
   showToast(`Loading ${chain} wallet data...`, 'info');
 
-  // 🔥 NOTĪRĀM VECOS DATUS pirms jaunu ielādes
   app.tokens = [];
   app.ethBalance = 0;
   app.txCount = 0;
