@@ -2,7 +2,6 @@
 // VISUALIZER FUNCTIONS
 // ============================================ //
 
-import { ethers } from 'ethers';
 import { UI } from './state.js';
 import { showToast, showProgress, setProgress, hideProgress, setButtonLoading, updateTokenListUI } from './ui.js';
 import { MAX_PARTICLES, CONNECTION_DISTANCE, VIZ_LOW_POWER_MODE } from './config.js';
