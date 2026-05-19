@@ -29,34 +29,32 @@ export const AppState = {
   particleCache: new Map()
 };
 
-// UI elementu references
-export let UI = {};
+// UI elementu references – tagad const, jo mēs nemainīsim pašu objektu, tikai tā īpašības
+export const UI = {};
 
-// Inicializē UI references
+// Inicializē UI references (pievieno īpašības esošajam objektam)
 export function initUI() {
-  UI = {
-    connectBtn: document.getElementById('connectBtn'),
-    renderBtn: document.getElementById('renderBtn'),
-    recordBtn: document.getElementById('recordBtn'),
-    generateNFTBtn: document.getElementById('generateNFTBtn'),
-    accountDisplay: document.getElementById('accountDisplay'),
-    recordTimer: document.getElementById('recordTimer'),
-    statusMsg: document.getElementById('statusMsg'),
-    progressBarContainer: document.getElementById('progressBarContainer'),
-    progressBar: document.getElementById('progressBar'),
-    ipfsPreview: document.getElementById('ipfsPreview'),
-    previewImage: document.getElementById('previewImage'),
-    previewVideo: document.getElementById('previewVideo'),
-    previewMetadata: document.getElementById('previewMetadata'),
-    styleIndicator: document.getElementById('styleIndicator'),
-    indicatorText: document.getElementById('indicatorText'),
-    warningBanner: document.getElementById('warningBanner'),
-    canvas: document.getElementById('snapshotCanvas'),
-    fullscreenIcon: document.getElementById('fullscreenIcon'),
-    toggleInfoIcon: document.getElementById('toggleInfoIcon'),
-    tokenListContainer: document.getElementById('tokenListContainer'),
-    tokenListContent: document.getElementById('tokenListContent'),
-    chainSelect: document.getElementById('chainSelect'),
-    chainStatus: document.getElementById('chainStatus')
-  };
+  UI.connectBtn = document.getElementById('connectBtn');
+  UI.renderBtn = document.getElementById('renderBtn');
+  UI.recordBtn = document.getElementById('recordBtn');
+  UI.generateNFTBtn = document.getElementById('generateNFTBtn');
+  UI.accountDisplay = document.getElementById('accountDisplay');
+  UI.recordTimer = document.getElementById('recordTimer');
+  UI.statusMsg = document.getElementById('statusMsg');
+  UI.progressBarContainer = document.getElementById('progressBarContainer');
+  UI.progressBar = document.getElementById('progressBar');
+  UI.ipfsPreview = document.getElementById('ipfsPreview');
+  UI.previewImage = document.getElementById('previewImage');
+  UI.previewVideo = document.getElementById('previewVideo');
+  UI.previewMetadata = document.getElementById('previewMetadata');
+  UI.styleIndicator = document.getElementById('styleIndicator');
+  UI.indicatorText = document.getElementById('indicatorText');
+  UI.warningBanner = document.getElementById('warningBanner');
+  UI.canvas = document.getElementById('snapshotCanvas');
+  UI.fullscreenIcon = document.getElementById('fullscreenIcon');
+  UI.toggleInfoIcon = document.getElementById('toggleInfoIcon');
+  UI.tokenListContainer = document.getElementById('tokenListContainer');
+  UI.tokenListContent = document.getElementById('tokenListContent');
+  UI.chainSelect = document.getElementById('chainSelect');
+  UI.chainStatus = document.getElementById('chainStatus');
 }
